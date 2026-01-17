@@ -1,6 +1,6 @@
 
 These are my dotfiles for Omarchy-Mac. Pick and choose to your liking.
-System backups are Asahi Alarm changes. I can't symlink these so manual copy-paste is needed but I've maintained the file paths.
+System backups are Asahi Alarm changes. I've maintained the file paths.
 
 Drop a ⭐ if you've found something useful in here.
 
