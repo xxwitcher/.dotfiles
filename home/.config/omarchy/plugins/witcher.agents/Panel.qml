@@ -213,7 +213,7 @@ Panel {
     open: root.opened
     focusTarget: terminalLoader.item
     contentWidth: panel.fittedContentWidth(Style.space(560))
-    contentHeight: panel.fittedContentHeight(Style.space(780), Style.space(780))
+    contentHeight: panel.fittedContentHeight(Style.space(600), Style.space(600))
 
     // No PanelKeyCatcher: every key, Esc and Tab included, belongs to the
     // agent. Close the panel by clicking the bar icon or outside it.
