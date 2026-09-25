@@ -14,19 +14,40 @@ git clone https://github.com/xxwitcher/.dotfiles.git ~/.dotfiles
 ~/.dotfiles/install.sh
 ```
 
-`install.sh` symlinks every file under `home/` into `$HOME`, moving any
-existing file aside to `<file>.bak.<timestamp>` first, then reloads Hyprland
-and fails loudly if `hyprctl configerrors` reports anything. It is safe to
-re-run. Because the configs are symlinks, edits made on the machine land
-directly in this repo, so just commit them.
+`install.sh` shows a checklist of modules (all preselected; space toggles,
+enter applies) and applies only the ones you keep. Modules that don't apply to
+the machine, like `touchbar` without tiny-dfr, aren't offered. It uses `gum`,
+which ships with Omarchy, and falls back to y/n prompts without it.
 
-Files under `system/` are copied (as root, via `sudo`) to the same path under
-`/` instead of symlinked. Each `system/etc/<app>/` folder is only installed if
-`<app>` is on the machine (a `<app>` command or `/usr/share/<app>` exists), so
-the same repo works on regular Omarchy and Omarchy-mac. If the app has a
-systemd service, it is restarted after its files change. Unchanged files are
-skipped, so re-runs don't ask for a password. Without a terminal, run
-`SUDO=pkexec ./install.sh`.
+```bash
+./install.sh                  # pick from the checklist
+./install.sh --all            # everything available, no questions
+./install.sh looks topbar     # just these modules
+./install.sh --list           # show the modules
+```
+
+| Module | What it does |
+|---|---|
+| `looks` | Purple rotating window border gradient, no gaps |
+| `keyboard` | Swap left Ctrl and left Super, touchpad workspace swipe |
+| `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
+| `topbar` | Auto-hide the top bar until the cursor hits the top edge |
+| `branding` | Catboy braille art for fastfetch and the About screen |
+| `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
+| `background` | Drako desktop background |
+| `touchbar` | Touch Bar layout and screenshot key (Omarchy-mac only) |
+
+Files under `home/` are symlinked into `$HOME`, moving any existing file aside
+to `<file>.bak.<timestamp>` first. Because they're symlinks, edits made on the
+machine land directly in this repo, so just commit them. Files under `system/`
+are copied as root (via `sudo`, one password prompt per app) instead, and the
+app's service is restarted if its files changed. Without a terminal, run
+`SUDO=pkexec ./install.sh --all`. When Hyprland files change, Hyprland is
+reloaded and the script fails loudly if `hyprctl configerrors` reports
+anything.
+
+Re-running is safe: anything already in place is left alone. Deselecting a
+module doesn't remove it if it was installed before.
 
 Note: `omarchy refresh hyprland` replaces these files with Omarchy's defaults.
 Re-run `install.sh` afterwards.
