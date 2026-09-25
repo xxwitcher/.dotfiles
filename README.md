@@ -35,7 +35,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 | `branding` | Catboy braille art for fastfetch and the About screen |
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
-| `bootscreen` | Purple catboy on the disk-unlock and login screens (rebuilds initramfs) |
+| `bootscreen` | Purple catboy on the disk-unlock and login screens, kept across updates |
 | `touchbar` | Touch Bar layout and screenshot key (Omarchy-mac only) |
 
 Files under `home/` are symlinked into `$HOME`, moving any existing file aside
@@ -111,16 +111,19 @@ Re-run `install.sh` afterwards.
   that theme's own background, so re-run `install.sh` (or
   `omarchy theme bg set ~/.dotfiles/backgrounds/drako.png`) to get it back.
 
-### Boot screen (`boot/catboy-logo.png`)
-- The catboy art (with "Witcher") rendered as purple dots, used as the logo
-  on the Plymouth disk-unlock screen and the SDDM login screen via
-  `omarchy plymouth set`, with a Catppuccin background (`#1e1e2e`) and a light
-  purple (`#c4b5fd`) password box and lock icon.
-- Patches `/usr/share/plymouth/themes/omarchy/omarchy.script` so the logo and
-  password box are vertically centered as one group (stock centers the logo
-  alone). Omarchy updates or `omarchy plymouth set` can revert that file;
-  re-run `./install.sh bootscreen` to reapply. Both steps rebuild the
-  initramfs, so this module takes a minute and needs the sudo password.
+### Boot screen (`bootscreen/`)
+- The catboy art (with "Witcher") as purple dots on the Plymouth disk-unlock
+  screen and the SDDM login screen, with a Catppuccin background (`#1e1e2e`),
+  a light purple (`#c4b5fd`) password box and lock icon, and the logo and
+  password box vertically centered as one group (stock centers the logo alone).
+- `dotfiles-bootscreen` (installed to `/usr/local/bin`) rebuilds Omarchy's
+  theme from its stock files with those changes, then rebuilds the initramfs.
+  It mirrors `omarchy plymouth set`, which can't run as root.
+- Those theme files belong to the `omarchy-settings` package, so
+  `95-dotfiles-bootscreen.hook` (installed to `/etc/pacman.d/hooks`) re-runs
+  the script after any update that rewrites them. The logo is installed to
+  `/usr/local/share/dotfiles-bootscreen/`.
+- To undo: remove those three files and run `omarchy refresh plymouth`.
 
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
