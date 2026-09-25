@@ -34,6 +34,7 @@ modules=(
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
   "bootscreen|Purple catboy on the disk-unlock and login screens, kept across updates|@bootscreen"
+  "smidriver|Silicon Motion SM77x USB display driver (xxwitcher's fix using system evdi-dkms); needs a reboot|@smi-driver"
   "touchbar|Touch Bar layout and screenshot key (Omarchy-mac)|system/etc/tiny-dfr"
 )
 
@@ -49,6 +50,9 @@ available() {
         ;;
       @background|@shell-theme|@agent-bar|@agent-terminal)
         command -v omarchy >/dev/null || return 1
+        ;;
+      @smi-driver)
+        command -v pacman >/dev/null && command -v omarchy >/dev/null || return 1
         ;;
       @bootscreen)
         command -v omarchy >/dev/null && [[ -d /usr/share/plymouth/themes/omarchy ]] || return 1
@@ -213,6 +217,60 @@ use_agent_chat_widget() {
   fi
 }
 
+# Silicon Motion SM77x USB display driver, from github.com/xxwitcher/SiliconMotion-Driver-Fix:
+# SiliconMotion's installer with its bundled EVDI build removed (it fails on
+# current kernels), so it runs on the system evdi-dkms instead. That needs
+# dkms, evdi-dkms (AUR) and the headers for the running kernel first.
+smi_repo_url=https://github.com/xxwitcher/SiliconMotion-Driver-Fix.git
+smi_repo_dir="$HOME/.local/share/dotfiles/SiliconMotion-Driver-Fix"
+
+install_smi_driver() {
+  local kernel_pkg
+  kernel_pkg=$(pacman -Qqo "/usr/lib/modules/$(uname -r)" 2>/dev/null | head -1)
+  if [[ -z $kernel_pkg ]]; then
+    echo "skip     smi driver (can't tell which package owns the running kernel)" >&2
+    return 0
+  fi
+
+  local needed=() pkg
+  for pkg in dkms "$kernel_pkg-headers"; do
+    pacman -Q "$pkg" >/dev/null 2>&1 || needed+=("$pkg")
+  done
+  if (( ${#needed[@]} )); then
+    omarchy pkg add "${needed[@]}"
+    echo "installed ${needed[*]}"
+  else
+    echo "ok       dkms $kernel_pkg-headers"
+  fi
+
+  if pacman -Q evdi-dkms >/dev/null 2>&1; then
+    echo "ok       evdi-dkms"
+  else
+    omarchy pkg aur add evdi-dkms
+    echo "installed evdi-dkms"
+  fi
+
+  if [[ -d $smi_repo_dir/.git ]]; then
+    git -C "$smi_repo_dir" pull -q --ff-only
+  else
+    mkdir -p "${smi_repo_dir%/*}"
+    git clone -q "$smi_repo_url" "$smi_repo_dir"
+  fi
+
+  if [[ -x /opt/siliconmotion/SMIUSBDisplayManager ]]; then
+    echo "ok       SiliconMotion driver (reinstall: sudo smi-installer uninstall, reboot, re-run)"
+    return 0
+  fi
+
+  # The driver installer copies its files by relative path, so it has to run
+  # from the repo folder.
+  if $SUDO bash -c 'cd "$1" && ./install.sh install' _ "$smi_repo_dir"; then
+    echo "installed SiliconMotion driver — reboot before plugging the adapter in"
+  else
+    echo "failed   SiliconMotion driver (see its output above; if it asks for a reboot, reboot and re-run)" >&2
+  fi
+}
+
 # Modules this machine can use, in menu order.
 names=() labels=()
 for m in "${modules[@]}"; do
@@ -282,6 +340,7 @@ for m in "${modules[@]}"; do
       @shell-theme) refresh_shell_theme ;;
       @bootscreen) set_bootscreen ;;
       @agent-terminal) setup_agent_terminal ;;
+      @smi-driver) install_smi_driver ;;
       @agent-bar) use_agent_chat_widget ;;
     esac
   done
