@@ -57,6 +57,11 @@ Re-run `install.sh` afterwards.
 - `SUPER + A` opens the agent (`omarchy-agent`); `SUPER + SHIFT + A` is unbound.
 - `CTRL + Q` closes the active window.
 
+### Auto-hiding top bar (`home/.config/topbar/autohide.sh`)
+- Hides the Omarchy bar and shows it only while the cursor is at the very top
+  of the screen (within 30px once it's open).
+- Started at login from `home/.config/hypr/autostart.lua`.
+
 ### Branding (`home/.config/omarchy/branding/about.txt`)
 - Braille art of a catboy (line art, with the top, shorts, socks and tail
   filled) shown by fastfetch and Omarchy's About screen
