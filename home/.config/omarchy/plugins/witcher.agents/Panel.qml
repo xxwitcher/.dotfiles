@@ -213,7 +213,10 @@ Panel {
     open: root.opened
     focusTarget: terminalLoader.item
     contentWidth: panel.fittedContentWidth(Style.space(560))
-    contentHeight: panel.fittedContentHeight(Style.space(600), Style.space(600))
+    // Sized to the screen rather than a fixed height: about two-thirds of it
+    // including the header, so the popup never runs to the bottom edge.
+    readonly property real fittedHeight: Math.round((panel.screen ? panel.screen.height : 800) * 0.55)
+    contentHeight: panel.fittedContentHeight(fittedHeight, fittedHeight)
 
     // No PanelKeyCatcher: every key, Esc and Tab included, belongs to the
     // agent. Close the panel by clicking the bar icon or outside it.
