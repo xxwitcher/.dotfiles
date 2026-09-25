@@ -57,6 +57,10 @@ Re-run `install.sh` afterwards.
 - `SUPER + A` opens the agent (`omarchy-agent`); `SUPER + SHIFT + A` is unbound.
 - `CTRL + Q` closes the active window.
 
+### Branding (`home/.config/omarchy/branding/about.txt`)
+- Custom braille ASCII art shown by fastfetch (and Omarchy's About screen)
+  instead of the Omarchy logo.
+
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
   (`Print`) key first, using the custom `screenshot.png` icon.
