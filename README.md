@@ -58,8 +58,8 @@ Re-run `install.sh` afterwards.
 - `CTRL + Q` closes the active window.
 
 ### Branding (`home/.config/omarchy/branding/about.txt`)
-- Custom braille ASCII art shown by fastfetch (and Omarchy's About screen)
-  instead of the Omarchy logo.
+- Braille art of a catboy (line art, with the top, shorts, socks and tail
+  filled) shown by fastfetch and Omarchy's About screen
 
 ### Fastfetch (`home/.config/fastfetch/config.jsonc`)
 - Omarchy's stock fastfetch layout with purple (`#8511f2`) logo and key
