@@ -32,7 +32,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 | `keyboard` | Swap left Ctrl and left Super, touchpad workspace swipe |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
-| `agentchat` | Chat with your default agent from the bar's agent widget, over compact usage limits |
+| `agentchat` | Agent widget with your default agent's real terminal inside it, under compact usage limits |
 | `branding` | Catboy braille art for fastfetch and the About screen |
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
@@ -95,19 +95,17 @@ Re-run `install.sh` afterwards.
   of the screen (within 30px once it's open).
 - Started at login from `home/.config/hypr/autostart.lua`.
 
-### Agent chat widget (`home/.config/omarchy/plugins/witcher.agents/`)
-- A clone of Omarchy's `omarchy.agents` bar widget. The panel keeps a compact
-  header (agent, plan, session and weekly limits side by side) and replaces
-  the token charts with a chat with Omarchy's default agent.
-- Each message runs the plugin's `bin/agent-chat`, which starts the default
-  agent headless with the same auto-approve flag `omarchy agent` uses, so it
-  acts without asking, like the Super+A keybinding, and keeps the agent's own
-  Omarchy skills and rules. Claude streams and resumes by session id; the
-  other agents reply in one piece. Only Claude has been tested.
-- The `agentchat` module links the plugin and points the bar's agents slot at
-  `witcher.agents`. `Main.qml` / `Agent.qml` are copies of the stock files, so
-  Omarchy updates to the stock usage code don't reach it. See the plugin's
-  README for details.
+### Agent terminal widget (`home/.config/omarchy/plugins/witcher.agents/`)
+- A clone of Omarchy's `omarchy.agents` bar widget: a compact header (agent,
+  plan, session and weekly limits side by side) over a real terminal running
+  the default agent the same way the agent console does
+  (`omarchy-agent --inline`), so every agent and every command works.
+- The `agentchat` module installs `qmltermwidget` if needed, links the plugin,
+  links a theme-generated terminal color scheme into
+  `/usr/lib/qt6/qml/QMLTermWidget/color-schemes/` (one sudo prompt), and
+  points the bar's agents slot at `witcher.agents`.
+- `Main.qml` / `Agent.qml` are copies of the stock files, so Omarchy updates to
+  the stock usage code don't reach it. See the plugin's README for details.
 
 ### Branding (`home/.config/omarchy/branding/about.txt`)
 - Braille art of a catboy (line art, with the top, shorts, socks and tail

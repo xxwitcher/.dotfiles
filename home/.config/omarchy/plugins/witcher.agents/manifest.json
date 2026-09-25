@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "witcher.agents",
-  "name": "Agent Chat",
+  "name": "Agent Terminal",
   "version": "1.0.0",
   "author": "witcher (based on Omarchy agents)",
   "license": "MIT",
-  "description": "Chat with Omarchy's default agent from the bar, over a compact view of its usage limits.",
+  "description": "The default agent's real terminal interface inside the bar's agent popup, under compact usage limits.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,8 +14,8 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Agent Chat",
-    "description": "A chat with the default agent (auto-approve, like the agent keybinding) under the session and weekly limits.",
+    "displayName": "Agent Terminal",
+    "description": "Popup with the agent, plan and session/weekly limits side by side over an embedded terminal running the default agent (omarchy-agent --inline).",
     "category": "AI",
     "aliases": [
       "agents",

@@ -29,7 +29,7 @@ modules=(
   "keyboard|Swap left Ctrl and left Super, touchpad workspace swipe|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
-  "agentchat|Chat with your default agent from the bar's agent widget, over compact usage limits|home/.config/omarchy/plugins/witcher.agents/Panel.qml home/.config/omarchy/plugins/witcher.agents/Main.qml home/.config/omarchy/plugins/witcher.agents/Agent.qml home/.config/omarchy/plugins/witcher.agents/manifest.json home/.config/omarchy/plugins/witcher.agents/README.md home/.config/omarchy/plugins/witcher.agents/bin/agent-chat home/.config/omarchy/plugins/witcher.agents/assets/claude.svg home/.config/omarchy/plugins/witcher.agents/assets/codex.svg home/.config/omarchy/plugins/witcher.agents/assets/codex-light.svg home/.config/omarchy/plugins/witcher.agents/assets/fireworks.svg @agent-bar"
+  "agentchat|Agent widget with your default agent's real terminal inside it, under compact usage limits|home/.config/omarchy/plugins/witcher.agents/Panel.qml home/.config/omarchy/plugins/witcher.agents/Main.qml home/.config/omarchy/plugins/witcher.agents/Agent.qml home/.config/omarchy/plugins/witcher.agents/manifest.json home/.config/omarchy/plugins/witcher.agents/README.md home/.config/omarchy/plugins/witcher.agents/bin/terminal-colors home/.config/omarchy/plugins/witcher.agents/assets/claude.svg home/.config/omarchy/plugins/witcher.agents/assets/codex.svg home/.config/omarchy/plugins/witcher.agents/assets/codex-light.svg home/.config/omarchy/plugins/witcher.agents/assets/fireworks.svg @agent-terminal @agent-bar"
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
@@ -47,7 +47,7 @@ available() {
         local app="${item#system/etc/}"
         command -v "$app" >/dev/null || [[ -d "/usr/share/$app" ]] || return 1
         ;;
-      @background|@shell-theme|@agent-bar)
+      @background|@shell-theme|@agent-bar|@agent-terminal)
         command -v omarchy >/dev/null || return 1
         ;;
       @bootscreen)
@@ -171,6 +171,29 @@ set_bootscreen() {
   echo "applied  boot screen"
 }
 
+# The widget embeds a terminal from the qmltermwidget package. It only reads
+# color schemes from its own folder, so link a scheme there that
+# bin/terminal-colors regenerates from the current Omarchy theme.
+agent_terminal_scheme=/usr/lib/qt6/qml/QMLTermWidget/color-schemes/Omarchy.colorscheme
+
+setup_agent_terminal() {
+  if pacman -Q qmltermwidget >/dev/null 2>&1; then
+    echo "ok       qmltermwidget"
+  else
+    omarchy pkg add qmltermwidget
+    echo "installed qmltermwidget"
+  fi
+
+  local scheme
+  scheme=$("$HOME/.config/omarchy/plugins/witcher.agents/bin/terminal-colors")
+  if [[ "$(readlink "$agent_terminal_scheme")" == "$scheme" ]]; then
+    echo "ok       $agent_terminal_scheme"
+  else
+    $SUDO ln -sfn "$scheme" "$agent_terminal_scheme"
+    echo "linked   $agent_terminal_scheme"
+  fi
+}
+
 # Point the bar's agents slot at the chat widget (a clone of omarchy.agents).
 use_agent_chat_widget() {
   local config="$HOME/.config/omarchy/shell.json"
@@ -249,6 +272,7 @@ for m in "${modules[@]}"; do
       @background) set_background ;;
       @shell-theme) refresh_shell_theme ;;
       @bootscreen) set_bootscreen ;;
+      @agent-terminal) setup_agent_terminal ;;
       @agent-bar) use_agent_chat_widget ;;
     esac
   done

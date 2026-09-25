@@ -1,22 +1,23 @@
-# Agent Chat (witcher.agents)
+# Agent Terminal (witcher.agents)
 
-A clone of Omarchy's `omarchy.agents` bar widget that turns the usage panel
-into a chat with Omarchy's default agent (`omarchy default agent <name>`).
+A clone of Omarchy's `omarchy.agents` bar widget. The popup keeps a compact
+header (the agent's mark, name and plan, then the session and weekly limits
+side by side) and puts a real terminal underneath, running your default agent
+exactly like the agent console does: `omarchy-agent --inline`. So it's the
+agent's own interface, with every slash command and interactive feature, for
+whichever agent is the default, including its auto-approve flag and its
+Omarchy skills and rules.
 
-- **Top:** one compact line with the agent's mark, name and plan, then the
-  session and weekly limits side by side. Usage data comes from the stock
-  `Main.qml` / `Agent.qml`, unchanged.
-- **Below:** the chat. Enter sends, Stop cancels a running turn, New chat
-  starts over, Esc closes. Replies render as Markdown and are selectable;
-  tool calls show as dim `⚙ Tool · detail` lines.
+- The terminal is a `QMLTermWidget` (package `qmltermwidget`). It lives as
+  long as the shell, so closing the popup keeps the session. Restart starts a
+  fresh one (Start, if the agent exited).
+- Every key goes to the agent, Esc and Tab included. Close the popup by
+  clicking the bar icon or outside it.
+- `bin/terminal-colors` writes `~/.local/state/witcher-agents/Omarchy.colorscheme`
+  from the current theme whenever the popup opens. The library only reads
+  schemes from its own folder, so the `agentchat` module links that file into
+  `/usr/lib/qt6/qml/QMLTermWidget/color-schemes/`. New colors apply after
+  `omarchy restart shell`.
+- Usage data comes from copies of the stock `Main.qml` / `Agent.qml`.
 
-Each message runs `bin/agent-chat`, which starts the default agent headless
-with the same auto-approve flag `omarchy agent` uses, from
-`~/.local/state/agent-chat`, so the agent's own Omarchy skills and rules still
-apply. Claude streams its reply and resumes the conversation by session id;
-the other agents (codex, opencode, crush, pi, omp, grok, agy, copilot, hermes,
-ori) reply in one piece and continue their latest session in that directory
-(ori can only answer each message on its own). Only Claude has been tested.
-
-IPC: `omarchy-shell witcher.agents <open|close|toggle|refresh|next>`.
-Bar icon: left = panel, right = launch the agent in a terminal.
+IPC: `omarchy-shell witcher.agents <open|close|toggle|restart|refresh|next>`.

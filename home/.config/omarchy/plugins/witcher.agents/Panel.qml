@@ -2,14 +2,17 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import QMLTermWidget
 import qs.Commons
 import qs.Ui
 
 // Dotfiles take on omarchy.agents: a compact usage header (agent, plan, and
-// the session/weekly limits side by side) over a chat with Omarchy's default
-// agent. Usage data still comes from the stock Main.qml/Agent.qml; each chat
-// turn runs bin/agent-chat, which drives whichever agent is the default and
-// streams a small NDJSON protocol back (see that script).
+// the session/weekly limits side by side) over a real terminal running
+// Omarchy's default agent the same way the agent console does
+// (`omarchy-agent --inline`), so every agent and every command works. The
+// terminal lives as long as the shell, so closing the popup keeps the
+// session. Usage data comes from the stock Main.qml/Agent.qml. Needs the
+// qmltermwidget package.
 Panel {
   id: root
   moduleName: "witcher.agents"
@@ -38,21 +41,12 @@ Panel {
   readonly property var headline: bindingWindow(provider)
   readonly property bool alarming: !!headline && headline.percent >= 0.9
 
-  // ---------------------------------------------------------------- chat state
-  readonly property string chatScript: String(Qt.resolvedUrl("bin/agent-chat")).replace(/^file:\/\//, "")
-  property string agentId: ""
-  property string sessionId: ""
-  property bool hasHistory: false
-  property bool busy: false
-
-  readonly property var agentNames: ({
-    claude: "Claude", codex: "Codex", opencode: "opencode", crush: "Crush", pi: "Pi",
-    omp: "OMP", grok: "Grok", agy: "Antigravity", copilot: "Copilot", hermes: "Hermes", ori: "Ori"
-  })
-  readonly property string agentName: agentId === "" ? "your agent" : (agentNames[agentId] || agentId)
+  // ---------------------------------------------------------------- terminal
+  readonly property string pluginDir: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
+  property string colorSchemePath: ""
+  property bool agentRunning: false
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
-  function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
 
   function selectProvider(index) {
     if (providers.length === 0) return
@@ -64,9 +58,10 @@ Panel {
     usage.refreshAll(true)
   }
 
-  function launchAgent() {
-    if (root.bar) root.bar.run("omarchy-agent --pick")
-    root.close()
+  // Tear the terminal down and start a fresh agent session.
+  function restartAgent() {
+    terminalLoader.active = false
+    terminalLoader.active = true
   }
 
   // ---------------------------------------------------------------- limits
@@ -154,67 +149,8 @@ Panel {
     return p ? Qt.resolvedUrl("assets/" + p.providerId + ".svg") : ""
   }
 
-  // ---------------------------------------------------------------- chat
-
-  function lastMessage() {
-    return chatModel.count > 0 ? chatModel.get(chatModel.count - 1) : null
-  }
-
-  function appendAssistant(text) {
-    var last = lastMessage()
-    if (last && last.role === "assistant")
-      chatModel.setProperty(chatModel.count - 1, "text", last.text + text)
-    else if (text.trim() !== "")
-      chatModel.append({ role: "assistant", text: text.replace(/^\s+/, ""), detail: "" })
-  }
-
-  function handleEvent(line) {
-    var event
-    try { event = JSON.parse(String(line || "")) } catch (e) { return }
-    if (event.type === "start") root.agentId = event.agent || root.agentId
-    else if (event.type === "session") root.sessionId = event.id || root.sessionId
-    else if (event.type === "delta") root.appendAssistant(event.text || "")
-    else if (event.type === "text") chatModel.append({ role: "assistant", text: event.text || "", detail: "" })
-    else if (event.type === "tool") chatModel.append({ role: "tool", text: event.name || "tool", detail: event.detail || "" })
-    else if (event.type === "error") chatModel.append({ role: "error", text: event.message || "Something went wrong.", detail: "" })
-    else if (event.type === "done") root.busy = false
-  }
-
-  function send() {
-    var text = input.text.trim()
-    if (text === "" || root.busy) return
-    chatModel.append({ role: "user", text: text, detail: "" })
-    input.text = ""
-
-    var command = [root.chatScript]
-    if (root.sessionId !== "") command.push("--session", root.sessionId)
-    else if (root.hasHistory) command.push("--continue")
-    command.push("--", text)
-
-    root.hasHistory = true
-    root.busy = true
-    chatProc.command = command
-    chatProc.running = true
-  }
-
-  function stop() {
-    if (!chatProc.running) return
-    chatProc.running = false
-    chatModel.append({ role: "error", text: "Stopped.", detail: "" })
-    root.busy = false
-  }
-
-  function newChat() {
-    if (chatProc.running) chatProc.running = false
-    chatModel.clear()
-    root.sessionId = ""
-    root.hasHistory = false
-    root.busy = false
-    input.forceActiveFocus()
-  }
-
-  // The chat has something to offer even before any usage is recorded, so the
-  // icon stays in the bar (unlike the stock widget, which hides until then).
+  // The agent works without any usage recorded, so the icon always shows
+  // (unlike the stock widget, which hides until then).
   visible: true
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -222,8 +158,7 @@ Panel {
   onOpenedChanged: if (opened) {
     nowMs = Date.now()
     usage.refreshLimits()
-    agentProbe.running = true
-    Qt.callLater(function() { input.forceActiveFocus() })
+    colorsProc.running = true
   }
 
   Main {
@@ -238,18 +173,12 @@ Panel {
     onTriggered: root.nowMs = Date.now()
   }
 
-  ListModel { id: chatModel }
-
+  // Terminal colors follow the current Omarchy theme.
   Process {
-    id: chatProc
-    stdout: SplitParser { onRead: function(line) { root.handleEvent(line) } }
-    onExited: root.busy = false
-  }
-
-  Process {
-    id: agentProbe
-    command: ["omarchy-default-agent"]
-    stdout: SplitParser { onRead: function(line) { root.agentId = String(line || "").trim() } }
+    id: colorsProc
+    running: true
+    command: [root.pluginDir + "/bin/terminal-colors"]
+    stdout: SplitParser { onRead: function(line) { root.colorSchemePath = String(line || "").trim() } }
   }
 
   IpcHandler {
@@ -259,6 +188,7 @@ Panel {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function restart(): void { root.restartAgent() }
     function refresh(): string { root.refreshNow(); return "ok" }
     function next(): string { root.selectProvider(root.providerIndex + 1); return "ok" }
   }
@@ -268,10 +198,9 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     text: "󱚣"
-    active: root.alarming || root.busy
+    active: root.alarming
     onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) root.launchAgent()
-      else if (buttonCode === Qt.MiddleButton) root.selectProvider(root.providerIndex + 1)
+      if (buttonCode === Qt.MiddleButton) root.selectProvider(root.providerIndex + 1)
       else root.toggle()
     }
   }
@@ -282,26 +211,22 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    focusTarget: input
-    contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(Style.space(600), Style.space(600))
+    focusTarget: terminalLoader.item
+    contentWidth: panel.fittedContentWidth(Style.space(560))
+    contentHeight: panel.fittedContentHeight(Style.space(780), Style.space(780))
 
-    PanelKeyCatcher {
-      id: keyCatcher
+    // No PanelKeyCatcher: every key, Esc and Tab included, belongs to the
+    // agent. Close the panel by clicking the bar icon or outside it.
+    Item {
       anchors.fill: parent
-      // Typing in the chat box must not trigger the panel's h/j/k/l/r keys.
-      blocked: input.activeFocus
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
-      onMoveRequested: function(dx, dy) { if (dx !== 0) root.selectProvider(root.providerIndex + dx) }
 
-      // ---------- Header: mark · agent · plan ············ new chat ----------
+      // ---------- Header: mark · agent · plan ············ restart ----------
       Item {
         id: header
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.max(headerName.implicitHeight, newChatButton.implicitHeight)
+        height: Math.max(headerName.implicitHeight, restartButton.implicitHeight)
 
         Image {
           id: headerMark
@@ -321,12 +246,12 @@ Panel {
           textFormat: Text.PlainText
           anchors.left: headerMark.right
           anchors.leftMargin: headerMark.visible ? Style.spacing.md : 0
-          anchors.right: newChatButton.left
+          anchors.right: restartButton.left
           anchors.rightMargin: Style.spacing.md
           anchors.verticalCenter: parent.verticalCenter
           elide: Text.ElideRight
           text: {
-            var name = root.provider ? root.provider.providerName : root.agentName
+            var name = root.provider ? root.provider.providerName : "Agent"
             var plan = root.planText(root.provider)
             return plan === "" ? name : name + "  ·  " + plan
           }
@@ -337,16 +262,16 @@ Panel {
         }
 
         Button {
-          id: newChatButton
+          id: restartButton
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
-          text: "New chat"
+          text: root.agentRunning ? "Restart" : "Start"
           bordered: true
           foreground: root.foreground
           fontFamily: root.fontFamily
           fontSize: Style.font.caption
           verticalPadding: Style.space(3)
-          onClicked: root.newChat()
+          onClicked: root.restartAgent()
         }
       }
 
@@ -373,7 +298,7 @@ Panel {
       }
 
       PanelSeparator {
-        id: chatSeparator
+        id: terminalSeparator
         anchors.top: limitsRow.bottom
         anchors.topMargin: Style.space(12)
         anchors.left: parent.left
@@ -381,98 +306,68 @@ Panel {
         foreground: root.foreground
       }
 
-      // ---------- Chat ----------
-      ListView {
-        id: messages
-        anchors.top: chatSeparator.bottom
-        anchors.topMargin: Style.space(12)
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: inputRow.top
-        anchors.bottomMargin: Style.space(10)
-        clip: true
-        spacing: Style.space(10)
-        model: chatModel
-        boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-
-        // Follow the conversation while it streams, unless you've scrolled up.
-        property bool pinned: true
-        onMovementEnded: pinned = atYEnd
-        onContentHeightChanged: if (pinned) Qt.callLater(positionViewAtEnd)
-        onCountChanged: { pinned = true; Qt.callLater(positionViewAtEnd) }
-
-        delegate: MessageItem {
-          required property string role
-          required property string text
-          required property string detail
-          width: messages.width
-          messageRole: role
-          messageText: text
-          messageDetail: detail
-        }
-
-        Text {
-          visible: chatModel.count === 0
-          anchors.centerIn: parent
-          width: parent.width * 0.8
-          horizontalAlignment: Text.AlignHCenter
-          wrapMode: Text.WordWrap
-          textFormat: Text.PlainText
-          text: "Ask " + root.agentName + " anything about this machine.\nIt runs with auto-approval, like the agent keybinding."
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-        }
-
-        footer: Text {
-          visible: root.busy
-          height: visible ? implicitHeight + Style.space(10) : 0
-          topPadding: Style.space(10)
-          textFormat: Text.PlainText
-          text: root.agentName + " is working…"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.italic: true
-        }
-      }
-
-      // ---------- Input ----------
-      Item {
-        id: inputRow
+      // ---------- The agent's own terminal interface ----------
+      Loader {
+        id: terminalLoader
+        anchors.top: terminalSeparator.bottom
+        anchors.topMargin: Style.space(10)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: Math.max(input.implicitHeight, sendButton.implicitHeight)
+        active: true
+        sourceComponent: terminalComponent
+      }
 
-        TextField {
-          id: input
-          anchors.left: parent.left
-          anchors.right: sendButton.left
-          anchors.rightMargin: Style.spacing.md
-          anchors.verticalCenter: parent.verticalCenter
-          placeholderText: "Ask " + root.agentName + "…"
-          foreground: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          Keys.onReturnPressed: root.send()
-          Keys.onEnterPressed: root.send()
-          Keys.onEscapePressed: root.close()
-          Keys.onTabPressed: root.switchPanel(1)
-        }
+      Text {
+        visible: !root.agentRunning
+        anchors.centerIn: terminalLoader
+        width: terminalLoader.width * 0.8
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: "The agent exited. Press Start to open a new session."
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+    }
+  }
 
-        Button {
-          id: sendButton
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.busy ? "Stop" : "Send"
-          bordered: true
-          foreground: root.busy ? root.urgent : root.foreground
-          fontFamily: root.fontFamily
-          fontSize: Style.font.bodySmall
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: root.busy ? root.stop() : root.send()
+  Component {
+    id: terminalComponent
+
+    QMLTermWidget {
+      id: terminal
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      colorScheme: "Omarchy"
+      blinkingCursor: true
+      enableBold: true
+      antialiasText: true
+      smooth: true
+
+      session: QMLTermSession {
+        id: agentSession
+        initialWorkingDirectory: Quickshell.env("HOME")
+        shellProgram: "omarchy-agent"
+        shellProgramArgs: ["--inline", "--pick"]
+        onFinished: root.agentRunning = false
+      }
+
+      Component.onCompleted: {
+        agentSession.startShellProgram()
+        root.agentRunning = true
+      }
+
+      // The terminal renders scrollback itself; the wheel scrolls it.
+      QMLTermScrollbar {
+        terminal: terminal
+        width: Style.space(6)
+        Rectangle {
+          anchors.fill: parent
+          radius: width / 2
+          color: root.foreground
+          opacity: 0.35
         }
       }
     }
@@ -555,61 +450,6 @@ Panel {
       width: meterTrack.width * root.clamp(meter.value, 0, 1)
       color: meter.alarming ? root.urgent : root.foreground
       Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-    }
-  }
-
-  // One chat entry. Your messages sit in a tinted bubble on the right; the
-  // agent's replies render as Markdown (selectable, so you can copy commands);
-  // tool calls and errors are single dim lines.
-  component MessageItem: Item {
-    id: item
-    property string messageRole: ""
-    property string messageText: ""
-    property string messageDetail: ""
-    implicitHeight: messageRole === "user" ? bubble.height : body.implicitHeight
-
-    Rectangle {
-      id: bubble
-      visible: item.messageRole === "user"
-      anchors.right: parent.right
-      width: Math.min(item.width * 0.85, userText.implicitWidth + Style.space(20))
-      height: userText.implicitHeight + Style.space(12)
-      radius: Style.cornerRadius
-      color: root.alpha(root.foreground, 0.10)
-
-      Text {
-        id: userText
-        anchors.fill: parent
-        anchors.margins: Style.space(6)
-        anchors.leftMargin: Style.space(10)
-        anchors.rightMargin: Style.space(10)
-        textFormat: Text.PlainText
-        wrapMode: Text.Wrap
-        text: item.messageRole === "user" ? item.messageText : ""
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
-      }
-    }
-
-    TextEdit {
-      id: body
-      visible: item.messageRole !== "user"
-      width: parent.width
-      readOnly: true
-      selectByMouse: true
-      wrapMode: TextEdit.Wrap
-      textFormat: item.messageRole === "assistant" ? TextEdit.MarkdownText : TextEdit.PlainText
-      text: {
-        if (item.messageRole === "tool")
-          return "⚙ " + item.messageText + (item.messageDetail !== "" ? "  ·  " + item.messageDetail : "")
-        return item.messageRole === "user" ? "" : item.messageText
-      }
-      color: item.messageRole === "error" ? root.urgent
-        : item.messageRole === "tool" ? root.dim : root.foreground
-      selectionColor: root.alpha(root.foreground, 0.3)
-      font.family: root.fontFamily
-      font.pixelSize: item.messageRole === "tool" ? Style.font.caption : Style.font.bodySmall
     }
   }
 }
