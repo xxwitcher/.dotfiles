@@ -37,7 +37,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
 | `bootscreen` | Purple catboy on the disk-unlock and login screens, kept across updates |
-| `smidriver` | Silicon Motion SM77x USB display driver with the system evdi-dkms (needs a reboot) |
+| `smidriver` | Silicon Motion SM77x USB display adapter driver (xxwitcher's fix + evdi-dkms and a crash fix) |
 | `touchbar` | Touch Bar layout and screenshot key (Omarchy-mac only) |
 
 Files under `home/` are symlinked into `$HOME`, moving any existing file aside
@@ -158,6 +158,11 @@ Re-run `install.sh` afterwards.
   `/etc/systemd/system/smiusbdisplay.service.d/nullfix.conf`, routing the call
   to the NULL-safe `evdi_open_attached_to_fixed`. Nothing in the driver or
   `evdi-dkms` is modified, and the drop-in survives driver reinstalls.
+- If the adapter is plugged in during the install, the driver service is
+  started right away, so its monitors come up without a reboot or replug.
+- If a package step fails (usually a stale package database), it says to run
+  `omarchy update` and re-run `./install.sh smidriver`, and the rest of the
+  install carries on.
 - Skipped when `/opt/siliconmotion` is already installed. To reinstall:
   `sudo smi-installer uninstall`, reboot, re-run the module.
 - Reboot afterwards. The catch-all monitor rule turns the external screen on,
