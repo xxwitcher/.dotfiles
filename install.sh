@@ -32,6 +32,7 @@ modules=(
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
+  "bootscreen|Purple catboy on the disk-unlock and login screens (rebuilds initramfs)|@bootscreen"
   "touchbar|Touch Bar layout and screenshot key (Omarchy-mac)|system/etc/tiny-dfr"
 )
 
@@ -47,6 +48,9 @@ available() {
         ;;
       @background|@shell-theme)
         command -v omarchy >/dev/null || return 1
+        ;;
+      @bootscreen)
+        command -v omarchy >/dev/null && [[ -d /usr/share/plymouth/themes/omarchy ]] || return 1
         ;;
     esac
   done
@@ -125,6 +129,40 @@ refresh_shell_theme() {
   fi
 }
 
+# Plymouth (disk unlock) and SDDM share the logo. omarchy plymouth set copies
+# it verbatim, so an identical file means it's already applied. It also
+# republishes the stock Plymouth script, which centers the logo alone with the
+# password box hanging 40px below it; the patch below centers them together as
+# one group. Both steps rebuild the initramfs and ask for the sudo password.
+plymouth_script=/usr/share/plymouth/themes/omarchy/omarchy.script
+
+set_bootscreen() {
+  local logo="$repo/boot/catboy-logo.png"
+  if cmp -s "$logo" /usr/share/plymouth/themes/omarchy/logo.png; then
+    echo "ok       boot screen logo"
+  else
+    omarchy plymouth set '#1e1e2e' '#c4b5fd' "$logo"
+    echo "set      boot screen logo"
+  fi
+
+  if grep -q "dotfiles: center" "$plymouth_script"; then
+    echo "ok       boot screen centering"
+    return
+  fi
+  if ! grep -q '^logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);$' "$plymouth_script"; then
+    echo "skip     boot screen centering (Plymouth script changed upstream)" >&2
+    return
+  fi
+
+  sudo sed -i 's|^logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);$|# dotfiles: center the logo and password box together as one group.\nlogo_group_entry_height = Image("entry.png").GetHeight();\nlogo.sprite.SetY(Window.GetHeight() / 2 - (logo.image.GetHeight() + 40 + logo_group_entry_height) / 2);|' "$plymouth_script"
+  if command -v limine-mkinitcpio >/dev/null; then
+    sudo limine-mkinitcpio
+  else
+    sudo mkinitcpio -P
+  fi
+  echo "patched  boot screen centering"
+}
+
 # Modules this machine can use, in menu order.
 names=() labels=()
 for m in "${modules[@]}"; do
@@ -189,6 +227,7 @@ for m in "${modules[@]}"; do
       system/*) copy_system "$item" ;;
       @background) set_background ;;
       @shell-theme) refresh_shell_theme ;;
+      @bootscreen) set_bootscreen ;;
     esac
   done
 done
