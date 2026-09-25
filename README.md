@@ -1,16 +1,16 @@
-# dotfiles (quattro)
+# dotfiles
 
 Personal overrides for Omarchy's Lua-based Hyprland config. Only the user
 override files are tracked; Omarchy's defaults still load first and these are
 applied on top.
 
 The older `.conf`-based setup (waybar, Asahi system tweaks, etc.) lives on the
-`main` branch.
+`legacy` branch.
 
 ## Install
 
 ```bash
-git clone -b quattro https://github.com/xxwitcher/.dotfiles.git ~/.dotfiles
+git clone https://github.com/xxwitcher/.dotfiles.git ~/.dotfiles
 ~/.dotfiles/install.sh
 ```
 
