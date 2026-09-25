@@ -259,16 +259,44 @@ install_smi_driver() {
 
   if [[ -x /opt/siliconmotion/SMIUSBDisplayManager ]]; then
     echo "ok       SiliconMotion driver (reinstall: sudo smi-installer uninstall, reboot, re-run)"
+  # The driver installer copies its files by relative path, so it has to run
+  # from the repo folder.
+  elif $SUDO bash -c 'cd "$1" && ./install.sh install' _ "$smi_repo_dir"; then
+    echo "installed SiliconMotion driver"
+  else
+    echo "failed   SiliconMotion driver (see its output above; if it asks for a reboot, reboot and re-run)" >&2
     return 0
   fi
 
-  # The driver installer copies its files by relative path, so it has to run
-  # from the repo folder.
-  if $SUDO bash -c 'cd "$1" && ./install.sh install' _ "$smi_repo_dir"; then
-    echo "installed SiliconMotion driver — reboot before plugging the adapter in"
+  install_smi_nullfix
+}
+
+# SMIUSBDisplayManager calls evdi_open_attached_to(NULL), which crashes in
+# upstream libevdi (strlen on NULL); SiliconMotion's bundled EVDI, which the
+# fix above skips, tolerated it. Preload a shim routing that call to the
+# NULL-safe evdi_open_attached_to_fixed. See smidriver/evdi-nullfix.c.
+smi_nullfix_lib=/usr/local/lib/libevdi-nullfix.so
+smi_nullfix_dropin=/etc/systemd/system/smiusbdisplay.service.d/nullfix.conf
+
+install_smi_nullfix() {
+  local build
+  build=$(mktemp -d)
+  gcc -shared -fPIC -O2 -o "$build/libevdi-nullfix.so" "$repo/smidriver/evdi-nullfix.c" -levdi
+
+  if cmp -s "$build/libevdi-nullfix.so" "$smi_nullfix_lib" && cmp -s "$repo/smidriver/nullfix.conf" "$smi_nullfix_dropin"; then
+    echo "ok       evdi null fix"
   else
-    echo "failed   SiliconMotion driver (see its output above; if it asks for a reboot, reboot and re-run)" >&2
+    $SUDO bash -c '
+      install -D -m 755 "$1" "$2"
+      install -D -m 644 "$3" "$4"
+      systemctl daemon-reload
+      systemctl reset-failed smiusbdisplay 2>/dev/null
+      systemctl try-restart smiusbdisplay
+    ' _ "$build/libevdi-nullfix.so" "$smi_nullfix_lib" "$repo/smidriver/nullfix.conf" "$smi_nullfix_dropin"
+    echo "installed evdi null fix ($smi_nullfix_lib + service drop-in)"
   fi
+  rm -rf "$build"
+  echo "note     reboot if the adapter's monitors don't come up"
 }
 
 # Modules this machine can use, in menu order.
