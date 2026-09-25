@@ -71,6 +71,19 @@ for appdir in "$repo"/system/etc/*/; do
   [[ -z "$service" ]] || echo "restarted $service"
 done
 
+# Set the desktop background. Omarchy points its current-background link at the
+# file in this repo, so it survives reboots (a theme change picks the theme's own
+# background again; re-run this script or `omarchy theme bg set` to restore it).
+background="$repo/backgrounds/drako.png"
+if command -v omarchy >/dev/null && [[ -f "$background" ]]; then
+  if [[ "$(readlink -f "$HOME/.local/state/omarchy/current/background")" == "$background" ]]; then
+    echo "ok       background"
+  else
+    omarchy theme bg set "$background"
+    echo "set      background -> backgrounds/$(basename "$background")"
+  fi
+fi
+
 # Apply and validate the Hyprland config when running inside a Hyprland session.
 if command -v hyprctl >/dev/null && hyprctl version >/dev/null 2>&1; then
   hyprctl reload >/dev/null
