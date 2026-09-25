@@ -1,0 +1,81 @@
+#!/bin/bash
+# Apply the dotfiles boot screen on top of Omarchy's packaged Plymouth (disk
+# unlock) and SDDM (login) themes: catboy logo, purple colors, and the logo
+# and password box centered together as one group.
+#
+# Every run starts again from Omarchy's stock assets, so it is idempotent and
+# keeps working when omarchy-settings updates overwrite the theme files. The
+# pacman hook 95-dotfiles-bootscreen.hook runs it after such updates.
+#
+# Mirrors what `omarchy plymouth set <bg> <text> <logo>` does, which can't be
+# used here because it refuses to run as root.
+
+set -euo pipefail
+
+share=/usr/local/share/dotfiles-bootscreen
+logo=$share/catboy-logo.png
+bg=1e1e2e
+text=c4b5fd
+
+stock=/usr/share/omarchy/default
+plymouth_dir=/usr/share/plymouth/themes/omarchy
+sddm_dir=/usr/share/sddm/themes/omarchy
+
+(( EUID == 0 )) || { echo "dotfiles-bootscreen: run as root" >&2; exit 1; }
+[[ -d $plymouth_dir && -f $stock/plymouth/omarchy.script ]] || { echo "dotfiles-bootscreen: Omarchy Plymouth theme not found, skipping" >&2; exit 0; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# Plymouth
+for asset in omarchy.script bullet.png entry.png lock.png progress_bar.png; do
+  cp "$stock/plymouth/$asset" "$tmp/$asset"
+done
+
+rgb() { awk -v n=$((16#$1)) 'BEGIN { printf "%.3f", n / 255 }'; }
+bg_rgb="$(rgb "${bg:0:2}"), $(rgb "${bg:2:2}"), $(rgb "${bg:4:2}")"
+sed -i \
+  -e "s/^Window.SetBackgroundTopColor.*/Window.SetBackgroundTopColor($bg_rgb);/" \
+  -e "s/^Window.SetBackgroundBottomColor.*/Window.SetBackgroundBottomColor($bg_rgb);/" \
+  "$tmp/omarchy.script"
+
+# Stock centers the logo alone and hangs the password box 40px below it.
+center_line='logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);'
+if grep -qxF "$center_line" "$tmp/omarchy.script"; then
+  sed -i "s|^logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);\$|# dotfiles: center the logo and password box together as one group.\\
+logo_group_entry_height = Image(\"entry.png\").GetHeight();\\
+logo.sprite.SetY(Window.GetHeight() / 2 - (logo.image.GetHeight() + 40 + logo_group_entry_height) / 2);|" "$tmp/omarchy.script"
+else
+  echo "dotfiles-bootscreen: stock logo placement changed upstream, leaving it uncentered" >&2
+fi
+
+for asset in bullet.png entry.png lock.png progress_bar.png; do
+  magick "$tmp/$asset" -channel RGB +level-colors "#$text","#$text" "$tmp/$asset"
+done
+cp "$logo" "$tmp/logo.png"
+
+for asset in omarchy.script bullet.png entry.png lock.png progress_bar.png logo.png; do
+  install -m 644 "$tmp/$asset" "$plymouth_dir/$asset"
+done
+
+# SDDM login screen (same logo and colors, like omarchy plymouth set).
+if [[ -d $sddm_dir && -f $stock/sddm/omarchy/Main.qml ]]; then
+  sed -e "s/#1a1b26/#$bg/g" -e "s/#ffffff/#$text/g" "$stock/sddm/omarchy/Main.qml" >"$tmp/Main.qml"
+  for asset in entry lock; do
+    magick "$tmp/$asset.png" -channel RGB +level-colors "#f7768e","#f7768e" "$tmp/$asset-failed.png"
+  done
+  for asset in Main.qml bullet.png entry.png lock.png entry-failed.png lock-failed.png logo.png; do
+    install -m 644 "$tmp/$asset" "$sddm_dir/$asset"
+  done
+  rm -f "$sddm_dir/logo.svg"
+fi
+
+[[ $(plymouth-set-default-theme) == omarchy ]] || plymouth-set-default-theme omarchy
+
+# Plymouth is read from the initramfs, so rebuild it.
+if command -v limine-mkinitcpio >/dev/null; then
+  limine-mkinitcpio
+else
+  mkinitcpio -P
+fi
+echo "dotfiles-bootscreen: applied"

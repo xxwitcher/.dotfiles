@@ -32,7 +32,7 @@ modules=(
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
-  "bootscreen|Purple catboy on the disk-unlock and login screens (rebuilds initramfs)|@bootscreen"
+  "bootscreen|Purple catboy on the disk-unlock and login screens, kept across updates|@bootscreen"
   "touchbar|Touch Bar layout and screenshot key (Omarchy-mac)|system/etc/tiny-dfr"
 )
 
@@ -129,38 +129,45 @@ refresh_shell_theme() {
   fi
 }
 
-# Plymouth (disk unlock) and SDDM share the logo. omarchy plymouth set copies
-# it verbatim, so an identical file means it's already applied. It also
-# republishes the stock Plymouth script, which centers the logo alone with the
-# password box hanging 40px below it; the patch below centers them together as
-# one group. Both steps rebuild the initramfs and ask for the sudo password.
-plymouth_script=/usr/share/plymouth/themes/omarchy/omarchy.script
+# Boot screen: bootscreen/dotfiles-bootscreen rebuilds Omarchy's Plymouth
+# (disk unlock) and SDDM (login) theme from stock with the catboy logo, purple
+# colors and the logo + password box centered as a group, then rebuilds the
+# initramfs. Those theme files belong to omarchy-settings, so a pacman hook
+# re-runs it after every update that rewrites them.
+bootscreen_files=(
+  "bootscreen/dotfiles-bootscreen:/usr/local/bin/dotfiles-bootscreen:755"
+  "bootscreen/catboy-logo.png:/usr/local/share/dotfiles-bootscreen/catboy-logo.png:644"
+  "bootscreen/95-dotfiles-bootscreen.hook:/etc/pacman.d/hooks/95-dotfiles-bootscreen.hook:644"
+)
 
 set_bootscreen() {
-  local logo="$repo/boot/catboy-logo.png"
-  if cmp -s "$logo" /usr/share/plymouth/themes/omarchy/logo.png; then
-    echo "ok       boot screen logo"
-  else
-    omarchy plymouth set '#1e1e2e' '#c4b5fd' "$logo"
-    echo "set      boot screen logo"
-  fi
+  local entry src dest mode pending=()
+  for entry in "${bootscreen_files[@]}"; do
+    IFS=: read -r src dest mode <<<"$entry"
+    if cmp -s "$repo/$src" "$dest"; then
+      echo "ok       $dest"
+    else
+      pending+=("$repo/$src" "$dest" "$mode")
+    fi
+  done
 
-  if grep -q "dotfiles: center" "$plymouth_script"; then
-    echo "ok       boot screen centering"
+  local applied=true
+  cmp -s "$repo/bootscreen/catboy-logo.png" /usr/share/plymouth/themes/omarchy/logo.png || applied=false
+  grep -qs "dotfiles: center" /usr/share/plymouth/themes/omarchy/omarchy.script || applied=false
+
+  if (( ${#pending[@]} == 0 )) && $applied; then
+    echo "ok       boot screen"
     return
   fi
-  if ! grep -q '^logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);$' "$plymouth_script"; then
-    echo "skip     boot screen centering (Plymouth script changed upstream)" >&2
-    return
-  fi
 
-  sudo sed -i 's|^logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);$|# dotfiles: center the logo and password box together as one group.\nlogo_group_entry_height = Image("entry.png").GetHeight();\nlogo.sprite.SetY(Window.GetHeight() / 2 - (logo.image.GetHeight() + 40 + logo_group_entry_height) / 2);|' "$plymouth_script"
-  if command -v limine-mkinitcpio >/dev/null; then
-    sudo limine-mkinitcpio
-  else
-    sudo mkinitcpio -P
-  fi
-  echo "patched  boot screen centering"
+  $SUDO bash -c '
+    while (( $# )); do install -D -m "$3" "$1" "$2"; shift 3; done
+    /usr/local/bin/dotfiles-bootscreen
+  ' _ "${pending[@]}"
+
+  local i
+  for (( i = 1; i < ${#pending[@]}; i += 3 )); do echo "installed ${pending[i]}"; done
+  echo "applied  boot screen"
 }
 
 # Modules this machine can use, in menu order.

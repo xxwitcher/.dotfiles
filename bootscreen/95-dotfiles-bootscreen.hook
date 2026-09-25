@@ -1,0 +1,15 @@
+# Re-apply the dotfiles boot screen whenever an update rewrites Omarchy's
+# Plymouth or SDDM theme files (they belong to omarchy-settings). Runs after
+# 90-mkinitcpio-install.hook and rebuilds the initramfs itself.
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/share/plymouth/themes/omarchy/*
+Target = usr/share/sddm/themes/omarchy/*
+Target = usr/share/omarchy/default/plymouth/*
+
+[Action]
+Description = Re-applying dotfiles boot screen...
+When = PostTransaction
+Exec = /usr/local/bin/dotfiles-bootscreen
