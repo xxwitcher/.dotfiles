@@ -85,7 +85,8 @@ Re-run `install.sh` afterwards.
 
 ### Branding (`home/.config/omarchy/branding/about.txt`)
 - Braille art of a catboy (line art, with the top, shorts, socks and tail
-  filled) shown by fastfetch and Omarchy's About screen
+  filled) with "Witcher" written at 45° along the thigh, shown by fastfetch
+  and Omarchy's About screen
 
 ### Fastfetch (`home/.config/fastfetch/config.jsonc`)
 - Omarchy's stock fastfetch layout with purple (`#8511f2`) logo and key
