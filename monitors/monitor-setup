@@ -11,18 +11,18 @@ without saving" reloads Hyprland to put everything back.
 Run from the dotfiles installer (./install.sh --monitors) or directly.
 """
 
+import copy
 import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 
 CONFIG = os.path.expanduser("~/.config/hypr/monitors.lua")
 BEGIN = "-- BEGIN dotfiles monitor setup (edit with ~/.dotfiles/install.sh --monitors)"
 END = "-- END dotfiles monitor setup"
-FONT = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf"
 
 ROTATIONS = [
     ("Normal", 0), ("90° (portrait)", 1), ("180° (upside down)", 2), ("270° (portrait, other way)", 3),
@@ -123,13 +123,30 @@ def load_monitors():
 
 
 changed = False
+KEEP_SECONDS = 15
 
 
-def apply(monitor):
+def apply(monitor, before):
+    """Apply a change live, then keep it only if confirmed within
+    KEEP_SECONDS; otherwise put the previous settings back. A change that
+    leaves you unable to answer undoes itself."""
     global changed
-    changed = True
     subprocess.run(["hyprctl", "eval", monitor.rule()], capture_output=True)
     time.sleep(0.6)
+    question = f"Keep this change? (reverting in {KEEP_SECONDS}s)"
+    if has_gum():
+        kept = subprocess.run(["gum", "confirm", "--default=true", f"--timeout={KEEP_SECONDS}s",
+                               question]).returncode == 0
+    else:
+        kept = confirm(question, default=True)
+    if kept:
+        changed = True
+        return
+    for attr in ("mode", "scale", "transform", "x", "y", "mirror", "disabled"):
+        setattr(monitor, attr, getattr(before, attr))
+    subprocess.run(["hyprctl", "eval", monitor.rule()], capture_output=True)
+    time.sleep(0.6)
+    print("Reverted.")
 
 
 def refresh_from_hyprland(monitors):
@@ -146,37 +163,38 @@ def refresh_from_hyprland(monitors):
 # ---------------------------------------------------------------- identify
 
 class Identifier:
-    """A big number on each screen, so you can tell them apart."""
+    """A big number in the top-left corner of each screen.
+
+    Drawn by identify.qml as a Quickshell layer-shell overlay, never as
+    windows: windows take keyboard focus (and drag the cursor along), which
+    left the menu unusable.
+    """
 
     def __init__(self):
-        self.dir = tempfile.mkdtemp(prefix="dotfiles-monitor-")
+        self.qml = os.path.join(os.path.dirname(os.path.realpath(__file__)), "identify.qml")
+        self.proc = None
 
     def show(self, monitors):
         self.hide()
-        for number, monitor in enumerate(monitors, 1):
-            if monitor.disabled:
-                continue
-            image = os.path.join(self.dir, f"dotfiles-monitor-{number}.png")
-            subprocess.run([
-                "magick", "-size", "360x360", "xc:#1e1e2e", "-fill", "#a855f7", "-font", FONT,
-                "-pointsize", "240", "-gravity", "center", "-annotate", "+0+0", str(number),
-                "-bordercolor", "#c4b5fd", "-border", "8", image,
-            ], capture_output=True)
-            rule = f"[monitor {monitor.name}; float; size 220 220; center; pin; noinitialfocus]"
-            subprocess.run(["hyprctl", "dispatch", f'hl.dsp.exec_cmd("{rule} imv -s full {image}")'],
-                           capture_output=True)
+        if not shutil.which("quickshell"):
+            return
+        numbers = {m.name: n for n, m in enumerate(monitors, 1) if not m.disabled}
+        env = dict(os.environ, MONITOR_NUMBERS=json.dumps(numbers))
+        self.proc = subprocess.Popen(["quickshell", "-p", self.qml], env=env,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
 
     def hide(self):
-        for client in hyprctl_json("clients"):
-            if client.get("class") == "imv" and "dotfiles-monitor-" in client.get("title", ""):
-                try:
-                    os.kill(client["pid"], 15)
-                except ProcessLookupError:
-                    pass
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        self.proc = None
 
     def cleanup(self):
         self.hide()
-        shutil.rmtree(self.dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------- menus
@@ -198,22 +216,25 @@ def pick_mode(monitor):
     options = sorted({clean_mode(m) for m in monitor.modes}, key=mode_key)
     choice = choose(f"Resolution and refresh rate for {monitor.label}", ["preferred"] + options)
     if choice:
+        before = copy.copy(monitor)
         monitor.mode = choice
-        apply(monitor)
+        apply(monitor, before)
 
 
 def pick_scale(monitor):
     choice = choose(f"Scale for {monitor.label} (bigger = larger text)", SCALES + ["auto"])
     if choice:
+        before = copy.copy(monitor)
         monitor.scale = choice if choice == "auto" else float(choice)
-        apply(monitor)
+        apply(monitor, before)
 
 
 def pick_rotation(monitor):
     choice = choose(f"Rotation for {monitor.label}", [name for name, _ in ROTATIONS])
     if choice:
+        before = copy.copy(monitor)
         monitor.transform = dict(ROTATIONS)[choice]
-        apply(monitor)
+        apply(monitor, before)
 
 
 def pick_position(monitor, monitors, number_of):
@@ -229,6 +250,7 @@ def pick_position(monitor, monitors, number_of):
         return
     side = " ".join(choice.split()[:2]) if choice.startswith(("right", "left")) else choice.split()[0]
     other = next(m for m in others if choice.endswith(f"{number_of[m.name]} ({m.label})"))
+    before = copy.copy(monitor)
     width, height = monitor.logical_size()
     other_width, other_height = other.logical_size()
     if side == "right of":
@@ -239,7 +261,7 @@ def pick_position(monitor, monitors, number_of):
         monitor.x, monitor.y = other.x, other.y - height
     else:
         monitor.x, monitor.y = other.x, other.y + other_height
-    apply(monitor)
+    apply(monitor, before)
 
 
 def pick_mirror(monitor, monitors, number_of):
@@ -248,9 +270,10 @@ def pick_mirror(monitor, monitors, number_of):
     choice = choose(f"Mirroring for {monitor.label}", options)
     if not choice:
         return
+    before = copy.copy(monitor)
     monitor.mirror = "" if choice == "Don't mirror" else next(
         m.name for m in others if choice.endswith(f"{number_of[m.name]} ({m.label})"))
-    apply(monitor)
+    apply(monitor, before)
 
 
 def toggle(monitor, monitors):
@@ -258,10 +281,11 @@ def toggle(monitor, monitors):
         print("That's the only screen that's on; it has to stay on.")
         time.sleep(1.5)
         return
+    before = copy.copy(monitor)
     monitor.disabled = not monitor.disabled
     if not monitor.disabled and monitor.mode == "":
         monitor.mode = "preferred"
-    apply(monitor)
+    apply(monitor, before)
 
 
 def edit(monitor, monitors, number_of):
@@ -314,6 +338,14 @@ def main():
         sys.exit("Run this inside a Hyprland session.")
     monitors = load_monitors()
     identifier = Identifier()
+
+    # Closing the terminal or killing the script must not leave the numbers up.
+    def stop(signum, frame):
+        identifier.cleanup()
+        sys.exit(1)
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, stop)
+
     try:
         while True:
             refresh_from_hyprland(monitors)
