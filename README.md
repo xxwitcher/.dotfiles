@@ -150,6 +150,14 @@ Re-run `install.sh` afterwards.
   `linux-asahi-headers` on Omarchy-mac), and `evdi-dkms` from the AUR. Then it
   clones the repo to `~/.local/share/dotfiles/SiliconMotion-Driver-Fix` and
   runs its `install.sh` as root from that folder.
+- Also installs a small fix: `SMIUSBDisplayManager` calls
+  `evdi_open_attached_to(NULL)` to grab any free EVDI device, which crashes in
+  upstream libevdi (it runs `strlen` on the argument; SiliconMotion's bundled
+  EVDI, skipped above, tolerated it). `smidriver/evdi-nullfix.c` is built into
+  `/usr/local/lib/libevdi-nullfix.so` and preloaded by the drop-in
+  `/etc/systemd/system/smiusbdisplay.service.d/nullfix.conf`, routing the call
+  to the NULL-safe `evdi_open_attached_to_fixed`. Nothing in the driver or
+  `evdi-dkms` is modified, and the drop-in survives driver reinstalls.
 - Skipped when `/opt/siliconmotion` is already installed. To reinstall:
   `sudo smi-installer uninstall`, reboot, re-run the module.
 - Reboot afterwards. The catch-all monitor rule turns the external screen on,
