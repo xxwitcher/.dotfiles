@@ -73,6 +73,8 @@ link_home() {
   fi
   ln -s "$src" "$dest"
   echo "linked   ~/$rel"
+  [[ $rel == .config/omarchy/plugins/* ]] && restart_shell=true
+  return 0
 }
 
 copy_system() {
@@ -182,6 +184,7 @@ setup_agent_terminal() {
   else
     omarchy pkg add qmltermwidget
     echo "installed qmltermwidget"
+    restart_shell=true
   fi
 
   local scheme
@@ -191,6 +194,7 @@ setup_agent_terminal() {
   else
     $SUDO ln -sfn "$scheme" "$agent_terminal_scheme"
     echo "linked   $agent_terminal_scheme"
+    restart_shell=true
   fi
 }
 
@@ -202,8 +206,10 @@ use_agent_chat_widget() {
   elif grep -qs '"omarchy.agents"' "$config"; then
     sed -i 's/"omarchy\.agents"/"witcher.agents"/' "$config"
     echo "switched bar omarchy.agents -> witcher.agents"
+    restart_shell=true
   else
     omarchy plugin enable witcher.agents >/dev/null && echo "enabled  witcher.agents"
+    restart_shell=true
   fi
 }
 
@@ -258,6 +264,9 @@ if (( ${#selected[@]} == 0 )); then
 fi
 
 reload_hypr=false
+# The shell runs without a file watcher, so new or changed plugins only load
+# after a restart. Set by the steps above when they change something.
+restart_shell=false
 for m in "${modules[@]}"; do
   name="$(field "$m" 1)"
   [[ " ${selected[*]} " == *" $name "* ]] || continue
@@ -288,4 +297,10 @@ if $reload_hypr && command -v hyprctl >/dev/null && hyprctl version >/dev/null 2
     exit 1
   fi
   echo "Hyprland reloaded"
+fi
+
+# Restart the Omarchy shell (bar) when a plugin changed and it's running.
+if $restart_shell && pgrep -f "quickshell -n -p .*omarchy/shell" >/dev/null; then
+  omarchy restart shell >/dev/null
+  echo "restarted Omarchy shell"
 fi

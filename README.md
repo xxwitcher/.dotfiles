@@ -103,7 +103,8 @@ Re-run `install.sh` afterwards.
 - The `agentchat` module installs `qmltermwidget` if needed, links the plugin,
   links a theme-generated terminal color scheme into
   `/usr/lib/qt6/qml/QMLTermWidget/color-schemes/` (one sudo prompt), and
-  points the bar's agents slot at `witcher.agents`.
+  points the bar's agents slot at `witcher.agents`. When any of that changes,
+  the installer restarts the Omarchy shell so the bar picks it up.
 - `Main.qml` / `Agent.qml` are copies of the stock files, so Omarchy updates to
   the stock usage code don't reach it. See the plugin's README for details.
 
