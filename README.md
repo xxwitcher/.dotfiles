@@ -35,6 +35,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 | `branding` | Catboy braille art for fastfetch and the About screen |
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
+| `bootscreen` | Purple catboy on the disk-unlock and login screens (rebuilds initramfs) |
 | `touchbar` | Touch Bar layout and screenshot key (Omarchy-mac only) |
 
 Files under `home/` are symlinked into `$HOME`, moving any existing file aside
@@ -109,6 +110,17 @@ Re-run `install.sh` afterwards.
   current-background link at the file in this repo. Switching themes picks
   that theme's own background, so re-run `install.sh` (or
   `omarchy theme bg set ~/.dotfiles/backgrounds/drako.png`) to get it back.
+
+### Boot screen (`boot/catboy-logo.png`)
+- The catboy art (with "Witcher") rendered as purple dots, used as the logo
+  on the Plymouth disk-unlock screen and the SDDM login screen via
+  `omarchy plymouth set`, with a Catppuccin background (`#1e1e2e`) and a light
+  purple (`#c4b5fd`) password box and lock icon.
+- Patches `/usr/share/plymouth/themes/omarchy/omarchy.script` so the logo and
+  password box are vertically centered as one group (stock centers the logo
+  alone). Omarchy updates or `omarchy plymouth set` can revert that file;
+  re-run `./install.sh bootscreen` to reapply. Both steps rebuild the
+  initramfs, so this module takes a minute and needs the sudo password.
 
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
