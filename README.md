@@ -20,6 +20,14 @@ and fails loudly if `hyprctl configerrors` reports anything. It is safe to
 re-run. Because the configs are symlinks, edits made on the machine land
 directly in this repo, so just commit them.
 
+Files under `system/` are copied (as root, via `sudo`) to the same path under
+`/` instead of symlinked. Each `system/etc/<app>/` folder is only installed if
+`<app>` is on the machine (a `<app>` command or `/usr/share/<app>` exists), so
+the same repo works on regular Omarchy and Omarchy-mac. If the app has a
+systemd service, it is restarted after its files change. Unchanged files are
+skipped, so re-runs don't ask for a password. Without a terminal, run
+`SUDO=pkexec ./install.sh`.
+
 Note: `omarchy refresh hyprland` replaces these files with Omarchy's defaults.
 Re-run `install.sh` afterwards.
 
@@ -48,3 +56,10 @@ Re-run `install.sh` afterwards.
 - `SUPER + B` opens the browser (default `SUPER + SHIFT + B` is unbound).
 - `SUPER + A` opens the agent (`omarchy-agent`); `SUPER + SHIFT + A` is unbound.
 - `CTRL + Q` closes the active window.
+
+### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
+- tiny-dfr config with the media layer shown by default and a screenshot
+  (`Print`) key first, using the custom `screenshot.png` icon.
+- Lives in `/etc/tiny-dfr/`, which tiny-dfr merges over the packaged
+  `/usr/share/tiny-dfr/config.toml` and checks for icons, so package updates
+  don't overwrite it.
