@@ -25,7 +25,7 @@ SUDO="${SUDO:-sudo}"
 # the module is only offered when <app> is installed), @background sets the
 # desktop background.
 modules=(
-  "looks|Purple rotating window border gradient, no gaps|home/.config/hypr/looknfeel.lua"
+  "looks|Purple rotating border gradient on windows, popups and notifications, no gaps|home/.config/hypr/looknfeel.lua home/.config/omarchy/themed/shell.hyprland.toml.tpl @shell-theme"
   "keyboard|Swap left Ctrl and left Super, touchpad workspace swipe|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
@@ -45,7 +45,7 @@ available() {
         local app="${item#system/etc/}"
         command -v "$app" >/dev/null || [[ -d "/usr/share/$app" ]] || return 1
         ;;
-      @background)
+      @background|@shell-theme)
         command -v omarchy >/dev/null || return 1
         ;;
     esac
@@ -112,6 +112,19 @@ set_background() {
   fi
 }
 
+# The shell (bar popups, notifications, lock screen) reads its border from the
+# generated theme, so rebuild the theme when the override isn't in it yet.
+# `omarchy theme refresh` keeps the current background.
+refresh_shell_theme() {
+  local generated="$HOME/.local/state/omarchy/current/theme/shell.toml"
+  if grep -qs "Keep it in sync with border_colors" "$generated"; then
+    echo "ok       shell theme"
+  else
+    omarchy theme refresh
+    echo "refreshed shell theme"
+  fi
+}
+
 # Modules this machine can use, in menu order.
 names=() labels=()
 for m in "${modules[@]}"; do
@@ -175,6 +188,7 @@ for m in "${modules[@]}"; do
         ;;
       system/*) copy_system "$item" ;;
       @background) set_background ;;
+      @shell-theme) refresh_shell_theme ;;
     esac
   done
 done

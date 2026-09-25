@@ -28,7 +28,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 
 | Module | What it does |
 |---|---|
-| `looks` | Purple rotating window border gradient, no gaps |
+| `looks` | Purple rotating border gradient on windows, popups and notifications, no gaps |
 | `keyboard` | Swap left Ctrl and left Super, touchpad workspace swipe |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
@@ -65,6 +65,16 @@ Re-run `install.sh` afterwards.
   `border_spin_seconds` / `border_spin_interval`, or remove the timer block to
   keep a static gradient.
 - Scrolling layout column width 0.97.
+
+### Shell borders (`home/.config/omarchy/themed/shell.hyprland.toml.tpl`)
+- Gives bar popups (battery, network, etc.), notifications, the lock screen and
+  password prompts the same purple gradient as the window border, for every
+  theme. Omarchy merges this template over the `[hyprland]` section of each
+  theme's generated `shell.toml`. The gradient is static there; only window
+  borders rotate.
+- Part of the `looks` module, which runs `omarchy theme refresh` (keeps the
+  background) when the generated theme doesn't have it yet. Keep its colors in
+  sync with `border_colors` in `looknfeel.lua`.
 
 ### Keyboard (`home/.config/hypr/input.lua`)
 - Left Ctrl and Left Super are swapped (`ctrl:swap_lwin_lctl`). Right Super
