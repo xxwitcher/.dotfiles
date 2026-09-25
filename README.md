@@ -61,6 +61,12 @@ Re-run `install.sh` afterwards.
 - Custom braille ASCII art shown by fastfetch (and Omarchy's About screen)
   instead of the Omarchy logo.
 
+### Fastfetch (`home/.config/fastfetch/config.jsonc`)
+- Omarchy's stock fastfetch layout with purple (`#8511f2`) logo and key
+  colors instead of green.
+- The OS line reads "Omarchy Mac" on Apple Silicon (detected from
+  `/proc/device-tree/compatible`) and "Omarchy" everywhere else.
+
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
   (`Print`) key first, using the custom `screenshot.png` icon.
