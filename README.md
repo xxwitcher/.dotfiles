@@ -37,6 +37,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
 | `bootscreen` | Purple catboy on the disk-unlock and login screens, kept across updates |
+| `smidriver` | Silicon Motion SM77x USB display driver with the system evdi-dkms (needs a reboot) |
 | `touchbar` | Touch Bar layout and screenshot key (Omarchy-mac only) |
 
 Files under `home/` are symlinked into `$HOME`, moving any existing file aside
@@ -138,6 +139,23 @@ Re-run `install.sh` afterwards.
   the script after any update that rewrites them. The logo is installed to
   `/usr/local/share/dotfiles-bootscreen/`.
 - To undo: remove those three files and run `omarchy refresh plymouth`.
+
+### Silicon Motion USB display driver (`smidriver` module)
+- Installs the SM77x USB-to-HDMI adapter driver from
+  [xxwitcher/SiliconMotion-Driver-Fix](https://github.com/xxwitcher/SiliconMotion-Driver-Fix):
+  SiliconMotion's installer with its bundled EVDI build removed, since that
+  fails on current kernels, so it uses the system `evdi-dkms` instead.
+- First installs `dkms`, the headers for the running kernel (the package that
+  owns `/usr/lib/modules/$(uname -r)` plus `-headers`, e.g.
+  `linux-asahi-headers` on Omarchy-mac), and `evdi-dkms` from the AUR. Then it
+  clones the repo to `~/.local/share/dotfiles/SiliconMotion-Driver-Fix` and
+  runs its `install.sh` as root from that folder.
+- Skipped when `/opt/siliconmotion` is already installed. To reinstall:
+  `sudo smi-installer uninstall`, reboot, re-run the module.
+- Reboot afterwards. The catch-all monitor rule turns the external screen on,
+  but at the laptop's scale 2; add a rule for it in `hypr/monitors.lua`
+  (name from `hyprctl monitors all`), e.g.
+  `hl.monitor({ output = "DVI-I-1", mode = "1920x1080@60", position = "auto", scale = 1 })`.
 
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
