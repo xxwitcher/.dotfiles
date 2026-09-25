@@ -67,6 +67,12 @@ Re-run `install.sh` afterwards.
 - The OS line reads "Omarchy Mac" on Apple Silicon (detected from
   `/proc/device-tree/compatible`) and "Omarchy" everywhere else.
 
+### Background (`backgrounds/drako.png`)
+- `install.sh` sets it with `omarchy theme bg set`, pointing Omarchy's
+  current-background link at the file in this repo. Switching themes picks
+  that theme's own background, so re-run `install.sh` (or
+  `omarchy theme bg set ~/.dotfiles/backgrounds/drako.png`) to get it back.
+
 ### Touch Bar, Omarchy-mac only (`system/etc/tiny-dfr/`)
 - tiny-dfr config with the media layer shown by default and a screenshot
   (`Print`) key first, using the custom `screenshot.png` icon.
