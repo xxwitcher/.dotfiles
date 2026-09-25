@@ -223,12 +223,12 @@ use_agent_chat_widget() {
   fi
 }
 
-# Silicon Motion SM77x USB display driver, from github.com/xxwitcher/SiliconMotion-Driver-Fix:
-# SiliconMotion's installer with its bundled EVDI build removed (it fails on
-# current kernels), so it runs on the system evdi-dkms instead. That needs
-# dkms, evdi-dkms (AUR) and the headers for the running kernel first.
-smi_repo_url=https://github.com/xxwitcher/SiliconMotion-Driver-Fix.git
-smi_repo_dir="$HOME/.local/share/dotfiles/SiliconMotion-Driver-Fix"
+# Silicon Motion SM77x USB display driver, vendored in smidriver/driver/ from
+# github.com/xxwitcher/SiliconMotion-Driver-Fix: SiliconMotion's installer with
+# its bundled EVDI build removed (it fails on current kernels), so it runs on
+# the system evdi-dkms instead. That needs dkms, evdi-dkms (AUR) and the
+# headers for the running kernel first.
+smi_driver_dir="$repo/smidriver/driver"
 
 install_smi_driver() {
   local kernel_pkg
@@ -265,18 +265,11 @@ install_smi_driver() {
     echo "installed evdi-dkms"
   fi
 
-  if [[ -d $smi_repo_dir/.git ]]; then
-    git -C "$smi_repo_dir" pull -q --ff-only
-  else
-    mkdir -p "${smi_repo_dir%/*}"
-    git clone -q "$smi_repo_url" "$smi_repo_dir"
-  fi
-
   if [[ -x /opt/siliconmotion/SMIUSBDisplayManager ]]; then
     echo "ok       SiliconMotion driver (reinstall: sudo smi-installer uninstall, reboot, re-run)"
   # The driver installer copies its files by relative path, so it has to run
-  # from the repo folder.
-  elif $SUDO bash -c 'cd "$1" && ./install.sh install' _ "$smi_repo_dir"; then
+  # from its own folder.
+  elif $SUDO bash -c 'cd "$1" && ./install.sh install' _ "$smi_driver_dir"; then
     echo "installed SiliconMotion driver"
   else
     echo "failed   SiliconMotion driver (see its output above; if it asks for a reboot, reboot and re-run)" >&2

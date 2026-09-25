@@ -141,15 +141,16 @@ Re-run `install.sh` afterwards.
 - To undo: remove those three files and run `omarchy refresh plymouth`.
 
 ### Silicon Motion USB display driver (`smidriver` module)
-- Installs the SM77x USB-to-HDMI adapter driver from
-  [xxwitcher/SiliconMotion-Driver-Fix](https://github.com/xxwitcher/SiliconMotion-Driver-Fix):
-  SiliconMotion's installer with its bundled EVDI build removed, since that
-  fails on current kernels, so it uses the system `evdi-dkms` instead.
+- Installs the SM77x USB-to-HDMI adapter driver, vendored in
+  `smidriver/driver/` from
+  [xxwitcher/SiliconMotion-Driver-Fix](https://github.com/xxwitcher/SiliconMotion-Driver-Fix)
+  (see `SOURCE.md` there): SiliconMotion's installer with its bundled EVDI
+  build removed, since that fails on current kernels, so it uses the system
+  `evdi-dkms` instead. Nothing is downloaded from that repo.
 - First installs `dkms`, the headers for the running kernel (the package that
   owns `/usr/lib/modules/$(uname -r)` plus `-headers`, e.g.
   `linux-asahi-headers` on Omarchy-mac), and `evdi-dkms` from the AUR. Then it
-  clones the repo to `~/.local/share/dotfiles/SiliconMotion-Driver-Fix` and
-  runs its `install.sh` as root from that folder.
+  runs `smidriver/driver/install.sh` as root from that folder.
 - Also installs a small fix: `SMIUSBDisplayManager` calls
   `evdi_open_attached_to(NULL)` to grab any free EVDI device, which crashes in
   upstream libevdi (it runs `strlen` on the argument; SiliconMotion's bundled
