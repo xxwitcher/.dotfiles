@@ -28,9 +28,13 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 ```
 
 After an interactive install, the installer offers a monitor setup (default
-no). It shows a number on every screen, then lets you change each monitor's
+no). It shows a number in the top-left corner of every screen (a Quickshell
+overlay, `monitors/identify.qml`, that never takes keyboard focus), then lets
+you change each monitor's
 resolution and refresh rate, scale, rotation, position (left/right/above/below
-another screen), mirroring, and turn it on or off. Changes apply live; "Save
+another screen), mirroring, and turn it on or off. Changes apply live and
+must be confirmed within 15 seconds or they revert on their own, so a change
+that leaves a screen unusable undoes itself; "Save
 and exit" writes them to a managed block at the end of
 `~/.config/hypr/monitors.lua`, matching monitors by model (so a monitor keeps
 its settings whichever port it's on), and "Quit without saving" puts everything
