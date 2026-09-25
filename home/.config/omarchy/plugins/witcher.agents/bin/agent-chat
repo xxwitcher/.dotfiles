@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""Run one chat turn with Omarchy's default agent and stream it as NDJSON.
+
+    agent-chat [--session ID] [--continue] PROMPT
+
+The bar panel speaks only the events below, so supporting an agent never
+touches the panel:
+
+    {"type": "start", "agent": "claude"}
+    {"type": "session", "id": "..."}          resumable id (Claude only)
+    {"type": "delta", "text": "..."}          streamed reply text (Claude only)
+    {"type": "tool", "name": "Bash", "detail": "ls ~"}
+    {"type": "text", "text": "..."}           whole reply (non-streaming agents)
+    {"type": "error", "message": "..."}
+    {"type": "done"}
+
+Each agent runs headless with the same "don't stop to ask" flag that
+`omarchy agent` launches it with, so its Omarchy skills and rules still apply.
+Turns run in a dedicated directory, so an agent's "continue the most recent
+session" always means this chat, never a session from a terminal.
+"""
+
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+
+WORKDIR = os.path.join(os.path.expanduser("~"), ".local", "state", "agent-chat")
+
+PANEL_NOTE = (
+    "You are answering inside a small chat panel in the Omarchy top bar, not a "
+    "terminal. Keep replies short and skimmable; use plain Markdown only "
+    "(no tables or wide code blocks)."
+)
+
+# The panel's Stop button terminates this script; take the agent down with it.
+children = []
+
+
+def stop(signum, frame):
+    for child in children:
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+    sys.exit(143)
+
+
+signal.signal(signal.SIGTERM, stop)
+signal.signal(signal.SIGINT, stop)
+
+ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")
+
+
+def emit(**event):
+    sys.stdout.write(json.dumps(event) + "\n")
+    sys.stdout.flush()
+
+
+def default_agent():
+    try:
+        return subprocess.run(["omarchy-default-agent"], capture_output=True, text=True).stdout.strip()
+    except OSError:
+        return ""
+
+
+def tool_detail(tool_input):
+    if not isinstance(tool_input, dict):
+        return ""
+    for key in ("command", "file_path", "path", "pattern", "url", "query", "description"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value:
+            return value.splitlines()[0][:120]
+    return ""
+
+
+def run_claude(prompt, session):
+    command = [
+        "claude", "-p", prompt,
+        "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+        "--permission-mode", "auto",
+        "--append-system-prompt", PANEL_NOTE,
+    ]
+    if session:
+        command += ["--resume", session]
+
+    proc = subprocess.Popen(command, cwd=WORKDIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            stdin=subprocess.DEVNULL, text=True)
+    children.append(proc)
+    announced = False
+    wrote_text = False
+    for line in proc.stdout:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        kind = event.get("type")
+        if kind == "system" and event.get("subtype") == "init" and not announced:
+            emit(type="session", id=event.get("session_id", ""))
+            announced = True
+        elif kind == "stream_event":
+            inner = event.get("event") or {}
+            delta = inner.get("delta") or {}
+            if inner.get("type") == "content_block_delta" and delta.get("type") == "text_delta":
+                emit(type="delta", text=delta.get("text", ""))
+                wrote_text = True
+            elif inner.get("type") == "message_start" and wrote_text:
+                # A new assistant message after tool use starts a new paragraph.
+                emit(type="delta", text="\n\n")
+        elif kind == "assistant":
+            for block in (event.get("message") or {}).get("content") or []:
+                if block.get("type") == "tool_use":
+                    emit(type="tool", name=block.get("name", ""), detail=tool_detail(block.get("input")))
+        elif kind == "result":
+            if event.get("session_id"):
+                emit(type="session", id=event["session_id"])
+            if event.get("is_error"):
+                emit(type="error", message=str(event.get("result") or "The agent reported an error."))
+    stderr = proc.stderr.read()
+    if proc.wait() != 0 and not announced:
+        emit(type="error", message=last_lines(stderr) or f"claude exited with status {proc.returncode}")
+
+
+# One-shot text mode for every other agent: the reply arrives whole, and a
+# follow-up continues the agent's most recent session in WORKDIR.
+def text_command(agent, prompt, follow_up, reply_file):
+    if agent == "codex":
+        base = ["codex", "exec"] + (["resume", "--last"] if follow_up else [])
+        return base + ["--approve-for-me", "--skip-git-repo-check", "-o", reply_file, prompt]
+    if agent == "opencode":
+        return ["opencode", "run", "--auto"] + (["-c"] if follow_up else []) + [prompt]
+    if agent == "crush":
+        return ["crush", "run", "--quiet"] + (["--continue"] if follow_up else []) + [prompt]
+    if agent == "pi":
+        return ["pi", "-p"] + (["-c"] if follow_up else []) + [prompt]
+    if agent == "omp":
+        return ["omp", "-p", "--auto-approve"] + (["-c"] if follow_up else []) + [prompt]
+    if agent == "grok":
+        return ["grok", "--permission-mode", "bypassPermissions"] + (["-c"] if follow_up else []) + ["-p", prompt]
+    if agent == "agy":
+        return ["agy", "--dangerously-skip-permissions"] + (["-c"] if follow_up else []) + ["-p", prompt]
+    if agent == "copilot":
+        return ["copilot", "--allow-all"] + (["--continue"] if follow_up else []) + ["-p", prompt]
+    if agent == "hermes":
+        return ["env", "-u", "HERMES_SESSION_SOURCE", "hermes", "chat", "--yolo", "-Q"] \
+            + (["-c"] if follow_up else []) + ["-q", prompt]
+    if agent == "ori":
+        # Ori resumes only by exact session id, so each message stands alone.
+        return ["ori", "code", "-p", prompt]
+    return None
+
+
+def run_text(agent, prompt, follow_up):
+    fd, reply_file = tempfile.mkstemp(prefix="agent-chat-", dir=WORKDIR)
+    os.close(fd)
+    try:
+        command = text_command(agent, prompt, follow_up, reply_file)
+        if command is None:
+            emit(type="error", message=f"The chat doesn't support '{agent}' yet.")
+            return
+        proc = subprocess.Popen(command, cwd=WORKDIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                stdin=subprocess.DEVNULL, text=True)
+        children.append(proc)
+        stdout, stderr = proc.communicate()
+        with open(reply_file) as f:
+            reply = f.read().strip()
+        if not reply:
+            reply = ANSI.sub("", stdout).strip()
+        if proc.returncode != 0 and not reply:
+            emit(type="error", message=last_lines(stderr) or f"{agent} exited with status {proc.returncode}")
+        else:
+            emit(type="text", text=reply or "(no reply)")
+    finally:
+        os.unlink(reply_file)
+
+
+def last_lines(text, count=4):
+    lines = [l for l in ANSI.sub("", text or "").strip().splitlines() if l.strip()]
+    return "\n".join(lines[-count:])
+
+
+def main():
+    args = sys.argv[1:]
+    session = ""
+    follow_up = False
+    while args and args[0].startswith("--"):
+        flag = args.pop(0)
+        if flag == "--session" and args:
+            session = args.pop(0)
+        elif flag == "--continue":
+            follow_up = True
+        elif flag == "--":
+            break
+    prompt = " ".join(args).strip()
+
+    agent = default_agent()
+    emit(type="start", agent=agent)
+    if not agent:
+        emit(type="error", message="No default agent. Pick one with: omarchy default agent <name>")
+    elif not prompt:
+        emit(type="error", message="Empty message.")
+    else:
+        os.makedirs(WORKDIR, exist_ok=True)
+        try:
+            if agent == "claude":
+                run_claude(prompt, session)
+            else:
+                run_text(agent, prompt, follow_up or bool(session))
+        except FileNotFoundError:
+            emit(type="error", message=f"{agent} is not installed.")
+    emit(type="done")
+
+
+if __name__ == "__main__":
+    main()

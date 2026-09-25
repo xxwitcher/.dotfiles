@@ -29,6 +29,7 @@ modules=(
   "keyboard|Swap left Ctrl and left Super, touchpad workspace swipe|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
+  "agentchat|Chat with your default agent from the bar's agent widget, over compact usage limits|home/.config/omarchy/plugins/witcher.agents/Panel.qml home/.config/omarchy/plugins/witcher.agents/Main.qml home/.config/omarchy/plugins/witcher.agents/Agent.qml home/.config/omarchy/plugins/witcher.agents/manifest.json home/.config/omarchy/plugins/witcher.agents/README.md home/.config/omarchy/plugins/witcher.agents/bin/agent-chat home/.config/omarchy/plugins/witcher.agents/assets/claude.svg home/.config/omarchy/plugins/witcher.agents/assets/codex.svg home/.config/omarchy/plugins/witcher.agents/assets/codex-light.svg home/.config/omarchy/plugins/witcher.agents/assets/fireworks.svg @agent-bar"
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
@@ -46,7 +47,7 @@ available() {
         local app="${item#system/etc/}"
         command -v "$app" >/dev/null || [[ -d "/usr/share/$app" ]] || return 1
         ;;
-      @background|@shell-theme)
+      @background|@shell-theme|@agent-bar)
         command -v omarchy >/dev/null || return 1
         ;;
       @bootscreen)
@@ -170,6 +171,19 @@ set_bootscreen() {
   echo "applied  boot screen"
 }
 
+# Point the bar's agents slot at the chat widget (a clone of omarchy.agents).
+use_agent_chat_widget() {
+  local config="$HOME/.config/omarchy/shell.json"
+  if grep -qs '"witcher.agents"' "$config"; then
+    echo "ok       bar uses witcher.agents"
+  elif grep -qs '"omarchy.agents"' "$config"; then
+    sed -i 's/"omarchy\.agents"/"witcher.agents"/' "$config"
+    echo "switched bar omarchy.agents -> witcher.agents"
+  else
+    omarchy plugin enable witcher.agents >/dev/null && echo "enabled  witcher.agents"
+  fi
+}
+
 # Modules this machine can use, in menu order.
 names=() labels=()
 for m in "${modules[@]}"; do
@@ -235,6 +249,7 @@ for m in "${modules[@]}"; do
       @background) set_background ;;
       @shell-theme) refresh_shell_theme ;;
       @bootscreen) set_bootscreen ;;
+      @agent-bar) use_agent_chat_widget ;;
     esac
   done
 done
