@@ -5,6 +5,7 @@
 #   ./install.sh --all           apply every module available on this machine
 #   ./install.sh looks topbar    apply only the named modules
 #   ./install.sh --list          list modules
+#   ./install.sh --monitors      only run the interactive monitor setup
 #
 # Files under home/ are symlinked into $HOME; an existing file is moved aside to
 # <file>.bak.<timestamp> first. Files under system/ are copied as root (root
@@ -328,8 +329,13 @@ for m in "${modules[@]}"; do
   labels+=("$(printf '%-12s %s' "$(field "$m" 1)" "$(field "$m" 2)")")
 done
 
+monitor_setup="$repo/monitors/monitor-setup"
+
 selected=()
 case "${1:-}" in
+  --monitors)
+    exec "$monitor_setup"
+    ;;
   --list)
     printf '%s\n' "${labels[@]}"
     exit 0
@@ -411,4 +417,15 @@ fi
 if $restart_shell && pgrep -f "quickshell -n -p .*omarchy/shell" >/dev/null; then
   omarchy restart shell >/dev/null
   echo "restarted Omarchy shell"
+fi
+
+# Offer the monitor setup at the end of an interactive install, so screens can
+# be arranged, rotated and scaled before closing the installer.
+if [[ -t 0 && -z ${1:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+  if command -v gum >/dev/null; then
+    gum confirm --default=false "Set up monitors now? (resolution, scale, rotation, position)" && "$monitor_setup" || true
+  else
+    read -rp "Set up monitors now? (resolution, scale, rotation, position) [y/N] " answer
+    [[ $answer =~ ^[Yy] ]] && "$monitor_setup" || true
+  fi
 fi
