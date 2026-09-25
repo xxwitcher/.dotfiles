@@ -34,11 +34,17 @@ modules=(
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
   "bootscreen|Purple catboy on the disk-unlock and login screens, kept across updates|@bootscreen"
-  "smidriver|Silicon Motion SM77x USB display driver (xxwitcher's fix using system evdi-dkms); needs a reboot|@smi-driver"
+  "smidriver|Silicon Motion SM77x USB display adapter driver (xxwitcher's fix + evdi-dkms and a crash fix)|@smi-driver"
   "touchbar|Touch Bar layout and screenshot key (Omarchy-mac)|system/etc/tiny-dfr"
 )
 
 field() { cut -d'|' -f"$2" <<<"$1"; }
+
+# True when a Silicon Motion USB device is plugged in (used to start the
+# driver right away after installing it).
+smi_adapter_present() {
+  grep -qsx 090c /sys/bus/usb/devices/*/idVendor
+}
 
 available() {
   local item
@@ -236,8 +242,14 @@ install_smi_driver() {
   for pkg in dkms "$kernel_pkg-headers"; do
     pacman -Q "$pkg" >/dev/null 2>&1 || needed+=("$pkg")
   done
+  # A stale package database makes these 404; Omarchy wants system updates to
+  # go through `omarchy update`, so point there instead of syncing here.
+  local stale="run \`omarchy update\` and re-run: ./install.sh smidriver"
   if (( ${#needed[@]} )); then
-    omarchy pkg add "${needed[@]}"
+    if ! omarchy pkg add "${needed[@]}"; then
+      echo "failed   installing ${needed[*]} — $stale" >&2
+      return 0
+    fi
     echo "installed ${needed[*]}"
   else
     echo "ok       dkms $kernel_pkg-headers"
@@ -246,7 +258,10 @@ install_smi_driver() {
   if pacman -Q evdi-dkms >/dev/null 2>&1; then
     echo "ok       evdi-dkms"
   else
-    omarchy pkg aur add evdi-dkms
+    if ! omarchy pkg aur add evdi-dkms; then
+      echo "failed   installing evdi-dkms — $stale" >&2
+      return 0
+    fi
     echo "installed evdi-dkms"
   fi
 
@@ -290,13 +305,26 @@ install_smi_nullfix() {
       install -D -m 755 "$1" "$2"
       install -D -m 644 "$3" "$4"
       systemctl daemon-reload
-      systemctl reset-failed smiusbdisplay 2>/dev/null
-      systemctl try-restart smiusbdisplay
     ' _ "$build/libevdi-nullfix.so" "$smi_nullfix_lib" "$repo/smidriver/nullfix.conf" "$smi_nullfix_dropin"
     echo "installed evdi null fix ($smi_nullfix_lib + service drop-in)"
   fi
   rm -rf "$build"
-  echo "note     reboot if the adapter's monitors don't come up"
+
+  # The driver's udev rule starts the service when the adapter is plugged in.
+  # If it already is, (re)start it now so the monitors come up without a
+  # reboot or replug, clearing any earlier crash-loop state.
+  if smi_adapter_present; then
+    if systemctl is-active -q smiusbdisplay && [[ $(systemctl show -p NRestarts --value smiusbdisplay) == 0 ]] \
+      && [[ $(systemctl show -p ActiveEnterTimestampMonotonic --value smiusbdisplay) -gt 0 ]] \
+      && systemctl show -p Environment --value smiusbdisplay | grep -q libevdi-nullfix; then
+      echo "ok       smiusbdisplay running"
+    else
+      $SUDO bash -c 'systemctl reset-failed smiusbdisplay 2>/dev/null; systemctl restart smiusbdisplay'
+      echo "started  smiusbdisplay (adapter is plugged in)"
+    fi
+  else
+    echo "note     plug the adapter in to start the driver (reboot if its monitors don't come up)"
+  fi
 }
 
 # Modules this machine can use, in menu order.
@@ -322,7 +350,7 @@ case "${1:-}" in
       exit 1
     fi
     if command -v gum >/dev/null; then
-      mapfile -t picked < <(gum choose --no-limit --height 12 \
+      mapfile -t picked < <(gum choose --no-limit --height 14 \
         --header "Space toggles, enter applies" \
         --selected '*' "${labels[@]}")
       for label in "${picked[@]}"; do selected+=("${label%% *}"); done
