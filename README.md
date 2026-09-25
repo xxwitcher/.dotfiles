@@ -24,7 +24,18 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 ./install.sh --all            # everything available, no questions
 ./install.sh looks topbar     # just these modules
 ./install.sh --list           # show the modules
+./install.sh --monitors       # just the monitor setup
 ```
+
+After an interactive install, the installer offers a monitor setup (default
+no). It shows a number on every screen, then lets you change each monitor's
+resolution and refresh rate, scale, rotation, position (left/right/above/below
+another screen), mirroring, and turn it on or off. Changes apply live; "Save
+and exit" writes them to a managed block at the end of
+`~/.config/hypr/monitors.lua`, matching monitors by model (so a monitor keeps
+its settings whichever port it's on), and "Quit without saving" puts everything
+back. The script is `monitors/monitor-setup`; `monitors.lua` itself stays out
+of the repo since it's specific to each machine.
 
 | Module | What it does |
 |---|---|
