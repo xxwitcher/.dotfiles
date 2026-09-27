@@ -45,13 +45,14 @@ of the repo since it's specific to each machine.
 | Module | What it does |
 |---|---|
 | `looks` | Purple rotating border gradient on windows, popups and notifications, no gaps, sliding fade between workspaces |
-| `keyboard` | Swap left Ctrl and left Super, macOS-like 3-finger workspace swipe |
+| `keyboard` | Swap left Ctrl and left Super, macOS-like 3-finger swipes (workspaces, overview) |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
 | `clock` | Clock in the middle of the top bar |
 | `battery` | Battery percentage next to the battery icon (machines with a battery only) |
 | `notifypanel` | Bell in the top bar that opens recent notifications, each dismissable, with Dismiss all |
 | `notifytimeout` | Every notification leaves the screen after 5 seconds, critical ones too |
+| `overview` | Swipe up with 3 fingers for a Mission Control-style overview: workspaces along the top, the hovered one's windows below; click to go there (the gesture is in `keyboard`) |
 | `suspend` | No screensaver; suspend after a chosen idle time (1, 5, 10, 15, 30 or 60 min) |
 | `agentchat` | Agent widget with your default agent's real terminal inside it, under compact usage limits |
 | `branding` | Catboy braille art for fastfetch and the About screen |
@@ -111,6 +112,8 @@ Re-run `install.sh` afterwards.
   full swipe is 150px (default 300), it commits after 15% of that (default
   50%), a quick flick switches even when short, and one swipe can carry on
   past the next workspace or make a new one at the end.
+- 3-finger swipe up opens the window overview (the `overview` module), swipe
+  down closes it. Without that module the swipe does nothing.
 
 ### Keybindings (`home/.config/hypr/bindings.lua`)
 - `SUPER + B` opens the browser (default `SUPER + SHIFT + B` is unbound).
@@ -151,6 +154,24 @@ Re-run `install.sh` afterwards.
   timer it doesn't pause while the pointer is over a toast.
 - It sits next to `omarchy.notifications` rather than replacing it, so Do Not
   Disturb and everything else keep working.
+
+### Window overview (`home/.config/omarchy/plugins/witcher.overview/`)
+- Like macOS Mission Control. Along the top, every workspace as a miniature
+  of the screen with its windows where they sit (live previews, including
+  hidden workspaces); the strip scrolls sideways when there are more than
+  fit (touchpad, or the mouse wheel). The workspace you're on has a dot.
+- Below it, the windows of the workspace you last hovered in the strip (the
+  current one to start with), laid out as big as they fit. The pick stays
+  when the pointer moves down, so you can reach them.
+- Click a workspace to go to it, or a window to go to that window.
+  `bin/focus-window` then moves the cursor onto the focused window so
+  Omarchy's focus-follows-mouse doesn't hand focus to whatever was under it.
+- Keys: Left/Right pick a workspace, Tab/Shift+Tab a window, Enter goes to
+  it (or to the workspace when it's empty), Esc closes; so does a click on
+  the backdrop.
+- Opened by the 3-finger swipe up (in `hypr/input.lua`), or
+  `omarchy-shell shell summon witcher.overview '{}'` from a keybinding.
+  Scratchpad windows stay out.
 
 ### Suspend when idle (`home/.config/omarchy/plugins/witcher.idle-suspend/`)
 - Turns Omarchy's screensaver off (`omarchy-toggle screensaver-off on`) and

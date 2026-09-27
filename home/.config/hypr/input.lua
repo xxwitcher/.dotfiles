@@ -63,6 +63,16 @@ hl.config({
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Gestures/
 hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 
+-- 3-finger swipe up shows every window on every workspace (the overview
+-- module's witcher.overview); swipe down hides it again. -q keeps it quiet
+-- when the overview isn't installed.
+hl.gesture({ fingers = 3, direction = "up", action = function()
+  hl.dispatch(hl.dsp.exec_cmd("omarchy-shell -q shell summon witcher.overview '{}'"))
+end })
+hl.gesture({ fingers = 3, direction = "down", action = function()
+  hl.dispatch(hl.dsp.exec_cmd("omarchy-shell -q shell hide witcher.overview"))
+end })
+
 -- macOS-like swipe: a short swipe is enough, and it follows the fingers.
 hl.config({
   gestures = {

@@ -27,13 +27,14 @@ SUDO="${SUDO:-sudo}"
 # desktop background.
 modules=(
   "looks|Purple rotating border gradient on windows, popups and notifications, no gaps, sliding fade between workspaces|home/.config/hypr/looknfeel.lua home/.config/omarchy/themed/shell.hyprland.toml.tpl @shell-theme"
-  "keyboard|Swap left Ctrl and left Super, macOS-like 3-finger workspace swipe|home/.config/hypr/input.lua"
+  "keyboard|Swap left Ctrl and left Super, macOS-like 3-finger swipes (workspaces, overview)|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
   "clock|Clock in the middle of the top bar|@clock-center"
   "battery|Battery percentage next to the battery icon in the top bar|@battery-percent"
   "notifypanel|Bell in the top bar that opens recent notifications, each dismissable, with Dismiss all|home/.config/omarchy/plugins/witcher.notifications/Panel.qml home/.config/omarchy/plugins/witcher.notifications/manifest.json home/.config/omarchy/plugins/witcher.notifications/bin/notification-store @notify-panel"
   "notifytimeout|Every notification leaves the screen after 5 seconds, critical ones too|home/.config/omarchy/plugins/witcher.notify-timeout/Service.qml home/.config/omarchy/plugins/witcher.notify-timeout/manifest.json @notify-timeout"
+  "overview|Swipe up with 3 fingers for a Mission Control-style overview of workspaces and windows (gesture is in keyboard)|home/.config/omarchy/plugins/witcher.overview/Overview.qml home/.config/omarchy/plugins/witcher.overview/manifest.json home/.config/omarchy/plugins/witcher.overview/bin/focus-window @overview"
   "suspend|No screensaver; suspend after a chosen idle time (1-60 min)|home/.config/omarchy/plugins/witcher.idle-suspend/Service.qml home/.config/omarchy/plugins/witcher.idle-suspend/manifest.json @idle-suspend"
   "agentchat|Agent widget with your default agent's real terminal inside it, under compact usage limits|home/.config/omarchy/plugins/witcher.agents/Panel.qml home/.config/omarchy/plugins/witcher.agents/Main.qml home/.config/omarchy/plugins/witcher.agents/Agent.qml home/.config/omarchy/plugins/witcher.agents/manifest.json home/.config/omarchy/plugins/witcher.agents/README.md home/.config/omarchy/plugins/witcher.agents/bin/terminal-colors home/.config/omarchy/plugins/witcher.agents/assets/claude.svg home/.config/omarchy/plugins/witcher.agents/assets/codex.svg home/.config/omarchy/plugins/witcher.agents/assets/codex-light.svg home/.config/omarchy/plugins/witcher.agents/assets/fireworks.svg @agent-terminal @agent-bar"
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
@@ -64,7 +65,7 @@ available() {
         local app="${item#system/etc/}"
         command -v "$app" >/dev/null || [[ -d "/usr/share/$app" ]] || return 1
         ;;
-      @background|@shell-theme|@agent-bar|@agent-terminal|@clock-center|@notify-panel|@notify-timeout|@idle-suspend)
+      @background|@shell-theme|@agent-bar|@agent-terminal|@clock-center|@notify-panel|@notify-timeout|@idle-suspend|@overview)
         command -v omarchy >/dev/null || return 1
         ;;
       @battery-percent)
@@ -293,8 +294,8 @@ use_notification_panel() {
     end'
 }
 
-# Services are switched on by an entry in plugins[]; extra keys on the entry
-# are its settings.
+# Services and overlays are switched on by an entry in plugins[]; extra keys
+# on the entry are their settings.
 enable_service() {
   local id="$1" settings="$2" message="$3"
   edit_shell_config "$message" '
@@ -531,6 +532,7 @@ for m in "${modules[@]}"; do
       @notify-panel) use_notification_panel ;;
       @notify-timeout) enable_service witcher.notify-timeout '{}' "5 second notifications" ;;
       @idle-suspend) setup_idle_suspend ;;
+      @overview) enable_service witcher.overview '{}' "window overview" ;;
     esac
   done
 done
