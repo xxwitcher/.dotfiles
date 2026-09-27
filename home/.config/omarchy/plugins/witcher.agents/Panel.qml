@@ -26,14 +26,59 @@ Panel {
   readonly property color track: Style.selectedFillFor(foreground, Color.accent)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
+  // ---------------------------------------------------------------- agent
+  // The header follows the agent actually running in the terminal: the
+  // default agent (omarchy default agent <name>) as it was when the session
+  // started. Changing the default doesn't kill a live session; the header
+  // switches over on the next Start/Restart.
+  readonly property string defaultAgentFile: Quickshell.env("HOME") + "/.config/omarchy/defaults/agent"
+  property string defaultAgent: ""
+  property string sessionAgent: ""
+  readonly property string currentAgent: sessionAgent !== "" ? sessionAgent : defaultAgent
+
+  // Agents whose usage Omarchy collects, keyed by agent id → usage record id.
+  readonly property var agentUsageIds: ({ "claude": "claude", "codex": "codex" })
+  readonly property var agentNames: ({
+    "pi": "Pi", "omp": "Oh My Pi", "opencode": "OpenCode", "ori": "Ori",
+    "claude": "Claude Code", "codex": "Codex", "crush": "Crush", "grok": "Grok",
+    "agy": "Antigravity", "hermes": "Hermes", "copilot": "GitHub Copilot"
+  })
+
+  function agentUsageId(agent) {
+    return agentUsageIds[agent] || ""
+  }
+
+  function agentName(agent) {
+    return agentNames[agent] || (agent === "" ? "Agent" : agent)
+  }
+
+  onCurrentAgentChanged: selectedProviderId = agentUsageId(currentAgent)
+
+  FileView {
+    path: root.defaultAgentFile
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.defaultAgent = String(text() || "").trim()
+    onLoadFailed: root.defaultAgent = ""
+  }
+
+  // A session started before the file was read (or while no default was
+  // set and --pick asked for one) adopts the first agent that shows up.
+  onDefaultAgentChanged: if (agentRunning && sessionAgent === "") sessionAgent = defaultAgent
+
   readonly property var providers: usage.enabledProviders
+  // Follows the current agent; middle-click / `next` can still cycle through
+  // the other providers until the agent changes.
   property string selectedProviderId: ""
   readonly property int providerIndex: {
     for (var i = 0; i < providers.length; i++)
       if (providers[i].providerId === selectedProviderId) return i
-    return 0
+    return -1
   }
-  readonly property var provider: providers.length > 0 ? providers[providerIndex] : null
+  // No usage for the current agent means no usage shown, rather than
+  // falling back to another agent's numbers.
+  readonly property var provider: providerIndex >= 0 ? providers[providerIndex] : null
 
   property double nowMs: Date.now()
 
@@ -254,7 +299,11 @@ Panel {
           anchors.verticalCenter: parent.verticalCenter
           elide: Text.ElideRight
           text: {
-            var name = root.provider ? root.provider.providerName : "Agent"
+            if (!root.provider) {
+              var agent = root.agentName(root.currentAgent)
+              return root.currentAgent === "" ? agent : agent + "  ·  Usage not tracked"
+            }
+            var name = root.provider.providerName
             var plan = root.planText(root.provider)
             return plan === "" ? name : name + "  ·  " + plan
           }
@@ -354,10 +403,14 @@ Panel {
         initialWorkingDirectory: Quickshell.env("HOME")
         shellProgram: "omarchy-agent"
         shellProgramArgs: ["--inline", "--pick"]
-        onFinished: root.agentRunning = false
+        onFinished: {
+          root.agentRunning = false
+          root.sessionAgent = ""
+        }
       }
 
       Component.onCompleted: {
+        root.sessionAgent = root.defaultAgent
         agentSession.startShellProgram()
         root.agentRunning = true
       }

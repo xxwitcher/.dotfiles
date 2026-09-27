@@ -30,6 +30,11 @@ modules=(
   "keyboard|Swap left Ctrl and left Super, touchpad workspace swipe|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
+  "clock|Clock in the middle of the top bar|@clock-center"
+  "battery|Battery percentage next to the battery icon in the top bar|@battery-percent"
+  "notifypanel|Bell in the top bar that opens recent notifications, each dismissable, with Dismiss all|home/.config/omarchy/plugins/witcher.notifications/Panel.qml home/.config/omarchy/plugins/witcher.notifications/manifest.json home/.config/omarchy/plugins/witcher.notifications/bin/notification-store @notify-panel"
+  "notifytimeout|Every notification leaves the screen after 5 seconds, critical ones too|home/.config/omarchy/plugins/witcher.notify-timeout/Service.qml home/.config/omarchy/plugins/witcher.notify-timeout/manifest.json @notify-timeout"
+  "suspend|No screensaver; suspend after a chosen idle time (1-60 min)|home/.config/omarchy/plugins/witcher.idle-suspend/Service.qml home/.config/omarchy/plugins/witcher.idle-suspend/manifest.json @idle-suspend"
   "agentchat|Agent widget with your default agent's real terminal inside it, under compact usage limits|home/.config/omarchy/plugins/witcher.agents/Panel.qml home/.config/omarchy/plugins/witcher.agents/Main.qml home/.config/omarchy/plugins/witcher.agents/Agent.qml home/.config/omarchy/plugins/witcher.agents/manifest.json home/.config/omarchy/plugins/witcher.agents/README.md home/.config/omarchy/plugins/witcher.agents/bin/terminal-colors home/.config/omarchy/plugins/witcher.agents/assets/claude.svg home/.config/omarchy/plugins/witcher.agents/assets/codex.svg home/.config/omarchy/plugins/witcher.agents/assets/codex-light.svg home/.config/omarchy/plugins/witcher.agents/assets/fireworks.svg @agent-terminal @agent-bar"
   "branding|Catboy braille art for fastfetch and the About screen|home/.config/omarchy/branding/about.txt"
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
@@ -47,6 +52,10 @@ smi_adapter_present() {
   grep -qsx 090c /sys/bus/usb/devices/*/idVendor
 }
 
+has_battery() {
+  grep -qsx Battery /sys/class/power_supply/*/type
+}
+
 available() {
   local item
   for item in $(field "$1" 3); do
@@ -55,8 +64,11 @@ available() {
         local app="${item#system/etc/}"
         command -v "$app" >/dev/null || [[ -d "/usr/share/$app" ]] || return 1
         ;;
-      @background|@shell-theme|@agent-bar|@agent-terminal)
+      @background|@shell-theme|@agent-bar|@agent-terminal|@clock-center|@notify-panel|@notify-timeout|@idle-suspend)
         command -v omarchy >/dev/null || return 1
+        ;;
+      @battery-percent)
+        command -v omarchy >/dev/null && has_battery || return 1
         ;;
       @smi-driver)
         command -v pacman >/dev/null && command -v omarchy >/dev/null || return 1
@@ -224,6 +236,123 @@ use_agent_chat_widget() {
   fi
 }
 
+# ~/.config/omarchy/shell.json is the user's own (machine-specific) bar layout,
+# so it isn't linked from the repo; the modules below edit it in place with a
+# jq filter. The shell hot-reloads it. Prints "ok" when the filter changes
+# nothing, otherwise writes it (starting from Omarchy's defaults if there's no
+# file yet) and prints the message.
+shell_config="$HOME/.config/omarchy/shell.json"
+
+edit_shell_config() {
+  local message="$1" filter="$2"
+  shift 2
+  if [[ ! -f $shell_config ]]; then
+    mkdir -p "$(dirname "$shell_config")"
+    cp "${OMARCHY_PATH:-/usr/share/omarchy}/config/omarchy/shell.json" "$shell_config"
+  fi
+  local current next
+  current=$(jq . "$shell_config")
+  next=$(jq "$@" "$filter" <<<"$current")
+  if [[ $next == "$current" ]]; then
+    echo "ok       $message"
+  else
+    printf '%s\n' "$next" >"$shell_config.tmp.$stamp"
+    mv "$shell_config.tmp.$stamp" "$shell_config"
+    echo "set      $message"
+  fi
+}
+
+# Moves a bar widget to the front of the center section, keeping its settings.
+center_clock() {
+  edit_shell_config "clock in the middle of the bar" '
+    if any(.bar.layout.center[]?; .id == "omarchy.clock") then . else
+      (first(.bar.layout[]?[]? | select(.id == "omarchy.clock")) // {id: "omarchy.clock"}) as $clock
+      | .bar.layout |= with_entries(.value |= map(select(.id != "omarchy.clock")))
+      | .bar.layout.center = [$clock] + (.bar.layout.center // [])
+    end'
+}
+
+# The stock power widget has the percentage built in (right-click toggles it);
+# this just turns it on.
+show_battery_percent() {
+  if ! jq -e 'any(.bar.layout[]?[]?; .id == "omarchy.power")' "$shell_config" >/dev/null 2>&1; then
+    echo "skip     battery percentage (omarchy.power isn't on the bar)"
+    return 0
+  fi
+  edit_shell_config "battery percentage" '
+    .bar.layout |= with_entries(.value |= map(if .id == "omarchy.power" then .showPercentage = true else . end))'
+}
+
+# The bell goes on the right, before Bluetooth (or at the end without it).
+use_notification_panel() {
+  edit_shell_config "notifications bell on the bar" '
+    if any(.bar.layout[]?[]?; .id == "witcher.notifications") then . else
+      (.bar.layout.right // []) as $right
+      | ([$right | to_entries[] | select(.value.id == "omarchy.bluetooth") | .key] | first // ($right | length)) as $at
+      | .bar.layout.right = $right[:$at] + [{id: "witcher.notifications"}] + $right[$at:]
+    end'
+}
+
+# Services are switched on by an entry in plugins[]; extra keys on the entry
+# are its settings.
+enable_service() {
+  local id="$1" settings="$2" message="$3"
+  edit_shell_config "$message" '
+    .plugins = (.plugins // [])
+    | if any(.plugins[]; .id == $id)
+      then .plugins |= map(if .id == $id then . + $settings else . end)
+      else .plugins += [{id: $id} + $settings]
+      end' --arg id "$id" --argjson settings "$settings"
+}
+
+suspend_choices=(1 5 10 15 30 60)
+
+# Asks how long to wait (the current setting, or 5, preselected);
+# SUSPEND_MINUTES skips the question. Without a terminal it keeps the current
+# setting.
+pick_suspend_minutes() {
+  local current
+  current=$(jq -r 'first(.plugins[]? | select(.id == "witcher.idle-suspend") | .minutes) // 5' "$shell_config" 2>/dev/null || echo 5)
+  [[ " ${suspend_choices[*]} " == *" $current "* ]] || current=5
+
+  if [[ -n ${SUSPEND_MINUTES:-} ]]; then
+    if [[ " ${suspend_choices[*]} " != *" $SUSPEND_MINUTES "* ]]; then
+      echo "SUSPEND_MINUTES must be one of: ${suspend_choices[*]}" >&2
+      return 1
+    fi
+    echo "$SUSPEND_MINUTES"
+  elif [[ ! -t 0 ]]; then
+    echo "$current"
+  elif command -v gum >/dev/null; then
+    local labels=() choice
+    for choice in "${suspend_choices[@]}"; do labels+=("${choice}m"); done
+    choice=$(gum choose --header "Suspend after how long idle?" --selected "${current}m" "${labels[@]}")
+    [[ -n $choice ]] || choice="${current}m"
+    echo "${choice%m}"
+  else
+    local answer
+    read -rp "Suspend after how many idle minutes? (${suspend_choices[*]}) [$current] " answer </dev/tty
+    answer=${answer%m}
+    [[ " ${suspend_choices[*]} " == *" $answer "* ]] || answer=$current
+    echo "$answer"
+  fi
+}
+
+# Suspend replaces the screensaver: Omarchy's own toggle turns that off, and
+# witcher.idle-suspend does the suspending (the lock still comes first, via
+# Omarchy's sleep-lock).
+setup_idle_suspend() {
+  local minutes
+  minutes=$(pick_suspend_minutes)
+  enable_service witcher.idle-suspend "{\"minutes\":$minutes}" "suspend after ${minutes}m idle"
+  if omarchy-toggle-enabled screensaver-off; then
+    echo "ok       screensaver off"
+  else
+    omarchy-toggle screensaver-off on
+    echo "set      screensaver off"
+  fi
+}
+
 # Silicon Motion SM77x USB display driver, vendored in smidriver/driver/ from
 # github.com/xxwitcher/SiliconMotion-Driver-Fix: SiliconMotion's installer with
 # its bundled EVDI build removed (it fails on current kernels), so it runs on
@@ -326,7 +455,7 @@ names=() labels=()
 for m in "${modules[@]}"; do
   available "$m" || continue
   names+=("$(field "$m" 1)")
-  labels+=("$(printf '%-12s %s' "$(field "$m" 1)" "$(field "$m" 2)")")
+  labels+=("$(printf '%-14s %s' "$(field "$m" 1)" "$(field "$m" 2)")")
 done
 
 monitor_setup="$repo/monitors/monitor-setup"
@@ -349,7 +478,7 @@ case "${1:-}" in
       exit 1
     fi
     if command -v gum >/dev/null; then
-      mapfile -t picked < <(gum choose --no-limit --height 14 \
+      mapfile -t picked < <(gum choose --no-limit --height 20 \
         --header "Space toggles, enter applies" \
         --selected '*' "${labels[@]}")
       for label in "${picked[@]}"; do selected+=("${label%% *}"); done
@@ -397,6 +526,11 @@ for m in "${modules[@]}"; do
       @agent-terminal) setup_agent_terminal ;;
       @smi-driver) install_smi_driver ;;
       @agent-bar) use_agent_chat_widget ;;
+      @clock-center) center_clock ;;
+      @battery-percent) show_battery_percent ;;
+      @notify-panel) use_notification_panel ;;
+      @notify-timeout) enable_service witcher.notify-timeout '{}' "5 second notifications" ;;
+      @idle-suspend) setup_idle_suspend ;;
     esac
   done
 done

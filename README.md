@@ -25,6 +25,7 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 ./install.sh looks topbar     # just these modules
 ./install.sh --list           # show the modules
 ./install.sh --monitors       # just the monitor setup
+SUSPEND_MINUTES=10 ./install.sh suspend   # suspend module without the question
 ```
 
 After an interactive install, the installer offers a monitor setup (default
@@ -47,6 +48,11 @@ of the repo since it's specific to each machine.
 | `keyboard` | Swap left Ctrl and left Super, touchpad workspace swipe |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
+| `clock` | Clock in the middle of the top bar |
+| `battery` | Battery percentage next to the battery icon (machines with a battery only) |
+| `notifypanel` | Bell in the top bar that opens recent notifications, each dismissable, with Dismiss all |
+| `notifytimeout` | Every notification leaves the screen after 5 seconds, critical ones too |
+| `suspend` | No screensaver; suspend after a chosen idle time (1, 5, 10, 15, 30 or 60 min) |
 | `agentchat` | Agent widget with your default agent's real terminal inside it, under compact usage limits |
 | `branding` | Catboy braille art for fastfetch and the About screen |
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
@@ -110,6 +116,47 @@ Re-run `install.sh` afterwards.
 - Hides the Omarchy bar and shows it only while the cursor is at the very top
   of the screen (within 30px once it's open).
 - Started at login from `home/.config/hypr/autostart.lua`.
+
+### Bar layout (`clock`, `battery`)
+- `~/.config/omarchy/shell.json` (the bar layout) stays out of the repo since
+  it's specific to each machine; these modules edit it in place with `jq`, and
+  the shell hot-reloads it.
+- `clock` moves `omarchy.clock` to the front of the bar's center section,
+  keeping its formats.
+- `battery` sets `showPercentage` on the stock `omarchy.power` widget (the
+  same setting right-clicking the battery icon toggles).
+
+### Notifications panel (`home/.config/omarchy/plugins/witcher.notifications/`)
+- A bell in the bar (filled while there's something to read) that opens every
+  recent notification: the ones still on screen, plus the ones that already
+  left it. Cards are Omarchy's own `NotificationCard`, so they look like the
+  popups: hover one and click its ✕ to dismiss it, or use "Dismiss all".
+  Clicking a card runs its action, like clicking the popup would.
+- Omarchy only keeps the last 10 notifications, so `bin/notification-store`
+  copies each one (and its images) into `~/.local/state/witcher/notifications/`
+  as it lands in Omarchy's history, keeping the newest 100, and remembers
+  dismissed ones so they don't come back.
+- Placed before Bluetooth on the right of the bar.
+
+### Notification timeout (`home/.config/omarchy/plugins/witcher.notify-timeout/`)
+- Omarchy keeps normal notifications up for 8 s (longer if the app asks) and
+  critical ones until they're clicked. This service takes every one off the
+  screen 5 s after it appears, through the stock service's own expire path,
+  so it still lands in history (and the notifications panel). Unlike the stock
+  timer it doesn't pause while the pointer is over a toast.
+- It sits next to `omarchy.notifications` rather than replacing it, so Do Not
+  Disturb and everything else keep working.
+
+### Suspend when idle (`home/.config/omarchy/plugins/witcher.idle-suspend/`)
+- Turns Omarchy's screensaver off (`omarchy-toggle screensaver-off on`) and
+  suspends after the chosen number of idle minutes, picked from a list when
+  the module runs (`SUSPEND_MINUTES` skips the question; re-run
+  `./install.sh suspend` to change it). The value is the `minutes` key on the
+  plugin's entry in `shell.json`.
+- Suspends like Omarchy's menu does (`systemctl suspend`), which locks the
+  screen first. Idle inhibitors (a playing video) and Omarchy's "stay awake"
+  toggle hold it off. The normal idle lock (5 min) still applies when it
+  comes first.
 
 ### Agent terminal widget (`home/.config/omarchy/plugins/witcher.agents/`)
 - A clone of Omarchy's `omarchy.agents` bar widget: a compact header (agent,
