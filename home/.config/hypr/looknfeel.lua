@@ -59,6 +59,10 @@ hl.config({
    },
  })
 
+-- Workspaces slide in with a fade (Omarchy switches them instantly), so a
+-- swipe or a SUPER+number switch eases over like macOS spaces.
+hl.animation({ leaf = "workspaces", enabled = true, speed = 4, bezier = "easeOutQuint", style = "slidefade 20%" })
+
 -- Rotate the active border gradient continuously around the window.
 -- Hyprland's borderangle "loop" animation stops after one turn on 0.56, so
 -- spin the gradient angle from a repeating timer instead.

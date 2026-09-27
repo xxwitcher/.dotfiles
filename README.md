@@ -44,8 +44,8 @@ of the repo since it's specific to each machine.
 
 | Module | What it does |
 |---|---|
-| `looks` | Purple rotating border gradient on windows, popups and notifications, no gaps |
-| `keyboard` | Swap left Ctrl and left Super, touchpad workspace swipe |
+| `looks` | Purple rotating border gradient on windows, popups and notifications, no gaps, sliding fade between workspaces |
+| `keyboard` | Swap left Ctrl and left Super, macOS-like 3-finger workspace swipe |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
 | `clock` | Clock in the middle of the top bar |
@@ -89,6 +89,8 @@ Re-run `install.sh` afterwards.
   `border_spin_seconds` / `border_spin_interval`, or remove the timer block to
   keep a static gradient.
 - Scrolling layout column width 0.97.
+- Switching workspaces (swipe or keys) slides the new one in with a fade
+  (`slidefade 20%`, 0.4 s, easeOutQuint); Omarchy switches instantly.
 
 ### Shell borders (`home/.config/omarchy/themed/shell.hyprland.toml.tpl`)
 - Gives bar popups (battery, network, etc.), notifications, the lock screen and
@@ -105,7 +107,10 @@ Re-run `install.sh` afterwards.
   and Right Ctrl are unchanged. Omarchy's default `compose:caps` and
   `shift:both_capslock_cancel` are kept, since setting `kb_options` replaces
   them.
-- 3-finger horizontal swipe switches workspaces.
+- 3-finger horizontal swipe switches workspaces, tuned to feel like macOS: a
+  full swipe is 150px (default 300), it commits after 15% of that (default
+  50%), a quick flick switches even when short, and one swipe can carry on
+  past the next workspace or make a new one at the end.
 
 ### Keybindings (`home/.config/hypr/bindings.lua`)
 - `SUPER + B` opens the browser (default `SUPER + SHIFT + B` is unbound).

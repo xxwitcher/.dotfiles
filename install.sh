@@ -26,8 +26,8 @@ SUDO="${SUDO:-sudo}"
 # the module is only offered when <app> is installed), @background sets the
 # desktop background.
 modules=(
-  "looks|Purple rotating border gradient on windows, popups and notifications, no gaps|home/.config/hypr/looknfeel.lua home/.config/omarchy/themed/shell.hyprland.toml.tpl @shell-theme"
-  "keyboard|Swap left Ctrl and left Super, touchpad workspace swipe|home/.config/hypr/input.lua"
+  "looks|Purple rotating border gradient on windows, popups and notifications, no gaps, sliding fade between workspaces|home/.config/hypr/looknfeel.lua home/.config/omarchy/themed/shell.hyprland.toml.tpl @shell-theme"
+  "keyboard|Swap left Ctrl and left Super, macOS-like 3-finger workspace swipe|home/.config/hypr/input.lua"
   "keybindings|SUPER+B browser, SUPER+A agent, CTRL+Q close window|home/.config/hypr/bindings.lua"
   "topbar|Auto-hide the top bar until the cursor hits the top edge|home/.config/topbar/autohide.sh home/.config/hypr/autostart.lua"
   "clock|Clock in the middle of the top bar|@clock-center"

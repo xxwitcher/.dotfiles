@@ -63,6 +63,17 @@ hl.config({
 -- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Gestures/
 hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 
+-- macOS-like swipe: a short swipe is enough, and it follows the fingers.
+hl.config({
+  gestures = {
+    workspace_swipe_distance = 150, -- px for a full swipe (default 300); lower responds faster
+    workspace_swipe_cancel_ratio = 0.15, -- commit after 15% of the distance instead of 50%
+    workspace_swipe_min_speed_to_force = 5, -- a quick flick switches even when short (default 30)
+    workspace_swipe_create_new = true, -- swiping past the last workspace makes a new one
+    workspace_swipe_forever = true, -- keep going past neighbours in one swipe
+  },
+})
+
 -- Enable touchpad gestures for moving focus (helpful on scrolling layout).
 -- hl.gesture({ fingers = 3, direction = "left", action = function() hl.dispatch(hl.dsp.focus({ direction = "l" })) end })
 -- hl.gesture({ fingers = 3, direction = "right", action = function() hl.dispatch(hl.dsp.focus({ direction = "r" })) end })
