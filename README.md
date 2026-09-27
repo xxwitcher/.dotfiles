@@ -23,10 +23,58 @@ which ships with Omarchy, and falls back to y/n prompts without it.
 ./install.sh                  # pick from the checklist
 ./install.sh --all            # everything available, no questions
 ./install.sh looks topbar     # just these modules
+./install.sh --add            # pick from the modules not installed yet
+./install.sh --remove         # pick installed modules to take back out (asks to confirm)
+./install.sh --remove clock   # take this one out, no questions
+./install.sh --configure      # change settings: monitors, border colors, suspend time, notification timeout
+./install.sh --status         # which modules are installed
 ./install.sh --list           # show the modules
 ./install.sh --monitors       # just the monitor setup
+./install.sh --remove-menu    # take Witcher's Tweaks out of the Omarchy menu
 SUSPEND_MINUTES=10 ./install.sh suspend   # suspend module without the question
+NOTIFY_SECONDS=8 ./install.sh --configure notifytimeout
 ```
+
+### Witcher's Tweaks menu
+
+Every run adds **Setup > Witcher's Tweaks** to the Omarchy menu (also reachable
+as `omarchy menu summon witcher`), with **Add**, **Remove** and **Configure**,
+each opening `install.sh --add`, `--remove` or `--configure` in a floating
+terminal. The entries sit between two marker comments in
+`~/.config/omarchy/extensions/omarchy-menu.jsonc`; the rest of that file is
+left alone, and `--remove-menu` takes the block out. **Configure** offers the
+monitor setup (always), the border colors (with `looks`), the suspend time
+(with `suspend`) and how long notifications stay up (with `notifytimeout`).
+Settings baked into the repo's own files, like the swipe tuning, aren't in
+it: changing them means editing the repo. The menu always lists
+Omarchy's own rows before added ones, so to put Witcher's Tweaks right under
+Config the block also hides the Setup rows Omarchy has after Config (Direct
+Boot, Reset Computer) and re-adds copies of them below it. The copies are
+rebuilt from Omarchy's menu on every run, and `--remove-menu` puts the
+originals back.
+
+### Removing
+
+`--remove` undoes a module's steps in reverse:
+
+- A linked file goes back to what it replaced: its newest `.bak.<timestamp>`
+  backup, else Omarchy's default copy (the Hyprland overrides), else nothing.
+  A file that isn't linked to the repo any more is left alone.
+- Settings written to `~/.config/omarchy/shell.json` are taken back out (the
+  clock returns to the right of the bar, the bell and battery percentage go,
+  plugin entries are dropped), and plugin folders are deleted once empty.
+- `topbar` stops the auto-hide loop and shows the bar; `suspend` turns the
+  screensaver back on; `looks` rebuilds the theme without the purple shell
+  borders; `background` switches to the theme's own background;
+  `notifypanel` also deletes its saved notifications.
+- `bootscreen` removes the pacman hook and script, then runs
+  `omarchy plymouth reset` (stock boot and login screens, initramfs rebuilt).
+  `smidriver` runs SiliconMotion's uninstaller and removes the null-fix shim;
+  `touchbar` puts back the original `/etc/tiny-dfr` files (or deletes the
+  copies). These ask for your password. Packages the modules pulled in
+  (qmltermwidget, dkms, evdi-dkms, kernel headers) stay installed.
+- `overview`'s swipe gestures live in `keyboard`'s `input.lua`; without the
+  overview they do nothing, and removing `keyboard` takes them out too.
 
 After an interactive install, the installer offers a monitor setup (default
 no). It shows a number in the top-left corner of every screen (a Quickshell
@@ -44,14 +92,14 @@ of the repo since it's specific to each machine.
 
 | Module | What it does |
 |---|---|
-| `looks` | Purple rotating border gradient on windows, popups and notifications, no gaps, sliding fade between workspaces |
+| `looks` | Rotating gradient border (purple, or colors you pick) on windows, popups and notifications, no gaps, sliding fade between workspaces |
 | `keyboard` | Swap left Ctrl and left Super, macOS-like 3-finger swipes (workspaces, overview) |
 | `keybindings` | SUPER+B browser, SUPER+A agent, CTRL+Q close window |
 | `topbar` | Auto-hide the top bar until the cursor hits the top edge |
 | `clock` | Clock in the middle of the top bar |
 | `battery` | Battery percentage next to the battery icon (machines with a battery only) |
 | `notifypanel` | Bell in the top bar that opens recent notifications, each dismissable, with Dismiss all |
-| `notifytimeout` | Every notification leaves the screen after 5 seconds, critical ones too |
+| `notifytimeout` | Every notification leaves the screen after a few seconds (5 by default; 3, 8, 10 or 15 via Configure), critical ones too |
 | `overview` | Swipe up with 3 fingers for a Mission Control-style overview: workspaces along the top, the hovered one's windows below; click to go there (the gesture is in `keyboard`) |
 | `suspend` | No screensaver; suspend after a chosen idle time (1, 5, 10, 15, 30 or 60 min) |
 | `agentchat` | Agent widget with your default agent's real terminal inside it, under compact usage limits |
@@ -72,7 +120,7 @@ reloaded and the script fails loudly if `hyprctl configerrors` reports
 anything.
 
 Re-running is safe: anything already in place is left alone. Deselecting a
-module doesn't remove it if it was installed before.
+module doesn't remove it if it was installed before; `--remove` does.
 
 Note: `omarchy refresh hyprland` replaces these files with Omarchy's defaults.
 Re-run `install.sh` afterwards.
@@ -81,27 +129,36 @@ Re-run `install.sh` afterwards.
 
 ### Look & feel (`home/.config/hypr/looknfeel.lua`)
 - No gaps between windows.
-- Active border is a light purple → purple → orchid gradient; inactive border
-  is a muted purple. Colors are evenly spaced, so a color is repeated to give
+- Active border is a three-color gradient, light purple → purple → orchid
+  unless you pick your own (see Border colors below); inactive border is a
+  muted purple. Colors are evenly spaced, so each is repeated (3/3/2) to give
   it more of the border.
 - The gradient rotates continuously around the active window (one turn every
   ~13 s). Hyprland's built-in `borderangle` `loop` animation stops after one
-  turn on 0.56, so a repeating `hl.timer` updates the angle instead. Tune
-  `border_spin_seconds` / `border_spin_interval`, or remove the timer block to
-  keep a static gradient.
+  turn on 0.56, so a repeating `hl.timer` updates the angle instead. The one
+  timer calls a tick function that every reload redefines, so edits apply
+  without restarting Hyprland. Tune `border_spin_seconds` /
+  `border_spin_interval`, or remove the timer block to keep a static gradient.
 - Scrolling layout column width 0.97.
 - Switching workspaces (swipe or keys) slides the new one in with a fade
   (`slidefade 20%`, 0.4 s, easeOutQuint); Omarchy switches instantly.
 
-### Shell borders (`home/.config/omarchy/themed/shell.hyprland.toml.tpl`)
-- Gives bar popups (battery, network, etc.), notifications, the lock screen and
-  password prompts the same purple gradient as the window border, for every
-  theme. Omarchy merges this template over the `[hyprland]` section of each
-  theme's generated `shell.toml`. The gradient is static there; only window
-  borders rotate.
-- Part of the `looks` module, which runs `omarchy theme refresh` (keeps the
-  background) when the generated theme doesn't have it yet. Keep its colors in
-  sync with `border_colors` in `looknfeel.lua`.
+### Border colors (`home/.config/omarchy/plugins/witcher.border-colors/`)
+- Setup > Witcher's Tweaks > Configure > Borders opens a color picker for the
+  gradient's three colors (light, main, accent) and the inactive border: a
+  saturation/brightness square and hue strip, a hex field, an eyedropper
+  (`hyprpicker`) and presets. Every change previews live on the real windows;
+  Save (Enter) keeps it, Cancel (Esc) goes back.
+- The colors are per machine, in `~/.config/witcher-tweaks/border.conf`
+  (`active=<3 hex>`, `inactive=<hex>`), so the repo keeps its defaults.
+  `looknfeel.lua` reads them; `bin/border-colors` (the picker's backend, also
+  usable directly: `get`, `set`, `reset`, `preview`, `revert`) writes
+  `~/.config/omarchy/themed/shell.hyprland.toml.tpl` from them, which Omarchy
+  merges over every theme's shell colors, so bar popups, notifications, the
+  lock screen and password prompts get the same gradient (static there; only
+  window borders rotate), and runs `omarchy theme refresh` when it changes.
+- Removing `looks` takes the template and saved colors out, rebuilds the
+  theme, stops the spinning border and restores `looknfeel.lua`.
 
 ### Keyboard (`home/.config/hypr/input.lua`)
 - Left Ctrl and Left Super are swapped (`ctrl:swap_lwin_lctl`). Right Super
@@ -149,7 +206,8 @@ Re-run `install.sh` afterwards.
 ### Notification timeout (`home/.config/omarchy/plugins/witcher.notify-timeout/`)
 - Omarchy keeps normal notifications up for 8 s (longer if the app asks) and
   critical ones until they're clicked. This service takes every one off the
-  screen 5 s after it appears, through the stock service's own expire path,
+  screen 5 s after it appears (change it with `--configure notifytimeout`),
+  through the stock service's own expire path,
   so it still lands in history (and the notifications panel). Unlike the stock
   timer it doesn't pause while the pointer is over a toast.
 - It sits next to `omarchy.notifications` rather than replacing it, so Do Not

@@ -2,7 +2,11 @@ import QtQuick
 
 // Takes every notification off the screen a few seconds after it appears.
 // Omarchy's own timer keeps normal toasts up for 8s (longer if the sender
-// asks) and critical ones until they're clicked; this caps all of them.
+// asks) and critical ones until they're clicked; this caps all of them. The
+// time is the `seconds` setting on this plugin's entry in
+// ~/.config/omarchy/shell.json (default 5):
+//
+//   "plugins": [{ "id": "witcher.notify-timeout", "seconds": 5 }]
 //
 // It doesn't replace omarchy.notifications (the DND indicator looks that
 // service up by id). It drives the stock service instead, through the same
@@ -14,7 +18,16 @@ Item {
 
   property var shell: null
 
-  readonly property int lifetimeMs: 5000
+  readonly property var entry: {
+    var plugins = shell && shell.shellConfig && Array.isArray(shell.shellConfig.plugins) ? shell.shellConfig.plugins : []
+    for (var i = 0; i < plugins.length; i++)
+      if (plugins[i] && plugins[i].id === "witcher.notify-timeout") return plugins[i]
+    return ({})
+  }
+  readonly property int lifetimeMs: {
+    var seconds = Number(entry.seconds)
+    return (isFinite(seconds) && seconds >= 1 ? seconds : 5) * 1000
+  }
 
   // First time each on-screen popup was seen, keyed by its history file stem
   // (timestamp-id), with the text it had then.
