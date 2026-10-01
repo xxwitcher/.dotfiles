@@ -44,6 +44,7 @@ with Omarchy, and falls back to y/n prompts without it.
 | `fastfetch` | Purple fastfetch layout with a Mac-aware OS label |
 | `background` | Drako desktop background |
 | `bootscreen` | Purple catboy on the disk-unlock and login screens, kept across updates |
+| `capslock` | Caps Lock turns on capitals instead of being the compose key |
 
 Files under `home/` are symlinked into `$HOME`, moving any existing file aside
 to `<file>.bak.<timestamp>` first; `--remove` puts the newest backup back.
@@ -84,3 +85,11 @@ left alone.
   `/usr/local/share/dotfiles-bootscreen/`.
 - To undo: `./install.sh --remove bootscreen` (removes those three files and
   runs `omarchy plymouth reset`, which rebuilds the initramfs).
+
+### Caps Lock (`home/.config/hypr/capslock.lua`)
+- Omarchy makes Caps Lock the compose key. This takes `compose:caps` out of
+  the keyboard options (keeping the rest), so Caps Lock turns on capitals.
+- Loaded by a marked block at the end of `~/.config/hypr/hyprland.lua`, which
+  `--remove capslock` takes back out.
+- Applying or removing it also restarts fcitx5 (`omarchy restart xcompose`),
+  which otherwise keeps the old keymap until it restarts.

@@ -29,6 +29,7 @@ modules=(
   "fastfetch|Purple fastfetch layout with a Mac-aware OS label|home/.config/fastfetch/config.jsonc"
   "background|Drako desktop background|@background"
   "bootscreen|Purple catboy on the disk-unlock and login screens, kept across updates|@bootscreen"
+  "capslock|Caps Lock turns on capitals instead of being the compose key|home/.config/hypr/capslock.lua @capslock"
 )
 
 field() { cut -d'|' -f"$2" <<<"$1"; }
@@ -194,6 +195,50 @@ remove_bootscreen() {
   echo "restored Omarchy's boot and login screens"
 }
 
+# ---------------------------------------------------------------- caps lock
+
+# capslock.lua is loaded by a marked block at the end of the user's
+# hyprland.lua, after Omarchy's defaults have set the keyboard options.
+hyprland_config="$HOME/.config/hypr/hyprland.lua"
+capslock_begin="-- >>> dotfiles capslock (managed by the .dotfiles install.sh)"
+capslock_end="-- <<< dotfiles capslock"
+
+# fcitx5 keeps the keymap it started with, so after Hyprland reloads it has to
+# restart too, or Caps Lock keeps acting as the compose key until it does.
+reload_keymap() {
+  hyprctl reload >/dev/null 2>&1 || true
+  omarchy restart xcompose >/dev/null 2>&1 || true
+}
+
+capslock_loaded() {
+  grep -qsxF -e "$capslock_begin" "$hyprland_config"
+}
+
+set_capslock() {
+  if capslock_loaded; then
+    echo "ok       ~/.config/hypr/hyprland.lua loads capslock.lua"
+    return
+  fi
+  printf '\n%s\nrequire("hypr.capslock")\n%s\n' "$capslock_begin" "$capslock_end" >>"$hyprland_config"
+  echo "set      ~/.config/hypr/hyprland.lua loads capslock.lua"
+  reload_keymap
+}
+
+remove_capslock() {
+  if ! capslock_loaded; then
+    echo "ok       ~/.config/hypr/hyprland.lua (doesn't load capslock.lua)"
+    return 0
+  fi
+  local tmp="$hyprland_config.tmp.$stamp"
+  awk -v begin="$capslock_begin" -v end="$capslock_end" '
+    $0 == begin { skip = 1; next }
+    skip && $0 == end { skip = 0; next }
+    !skip { print }' "$hyprland_config" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' >"$tmp"
+  mv "$tmp" "$hyprland_config"
+  echo "removed  the capslock block from ~/.config/hypr/hyprland.lua"
+  reload_keymap
+}
+
 # ---------------------------------------------------------------- steps
 
 step() {
@@ -210,6 +255,10 @@ step() {
     apply:@bootscreen) set_bootscreen ;;
     remove:@bootscreen) remove_bootscreen ;;
     check:@bootscreen) bootscreen_installed ;;
+
+    apply:@capslock) set_capslock ;;
+    remove:@capslock) remove_capslock ;;
+    check:@capslock) capslock_loaded ;;
 
     *) echo "unknown step: $action $item" >&2; return 1 ;;
   esac
